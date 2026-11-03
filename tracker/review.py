@@ -7,6 +7,7 @@ import time
 import chess
 import requests
 
+from . import motifs
 from .analyze import PIECE_VALUE, VERSION, win_percent
 
 URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -38,6 +39,7 @@ Hard rules:
 - Write moves with their number, such as 22.g4 or 25...Qxf6. Never use the word "ply".
 - Say a piece was won or lost only if the material notes in the game table show it.
 - Evaluations are from the player's side, in pawns.
+- Use the words pin, skewer, fork, discovered check, discovered attack and back rank only for patterns listed under board-checked tactics, and cite the move in the same sentence. A knight check that uncovers a rook is a discovered attack, not a discovered check.
 
 Reply with JSON only:
 {"headline": "one line naming the shape of the game",
@@ -75,6 +77,10 @@ def material_balance(board, color):
     for piece in board.piece_map().values():
         total += PIECE_VALUE[piece.piece_type] * (1 if piece.color == color else -1)
     return total
+
+
+def last_move_number(boards):
+    return boards[-2].fullmove_number if len(boards) > 1 else boards[-1].fullmove_number
 
 
 def label_at(boards, ply):
@@ -117,7 +123,7 @@ def build_prompt(game):
     lines = [
         f"You played {game['color']} at rating {game.get('rating') or 'unrated'} against {opponent}.",
         f"Time control: {game['speed']}. Opening: {game.get('opening') or 'unknown'}.",
-        f"Result: {game['result']} by {game['status']} after {boards[-1].fullmove_number} moves.",
+        f"Result: {game['result']} by {game['status']} after {last_move_number(boards)} moves.",
         f"Your accuracy {analysis['acc']}: blunders {counts['blunder']}, mistakes {counts['mistake']}, inaccuracies {counts['inaccuracy']}.",
         f"Length: {length_for(game)}.",
         "",
@@ -152,6 +158,9 @@ def build_prompt(game):
             continue
         seen.add(h["ply"])
         lines.append("- " + facts(h["ply"], h["san"], h["why"], "", "Engine line"))
+    tactics = motifs.verified_tactics(game, boards)
+    lines.append("Board-checked tactics:" if tactics else "Board-checked tactics: none at the key moments.")
+    lines += ["- " + t for t in tactics]
     return "\n".join(lines)
 
 
@@ -203,7 +212,7 @@ def parse_review(text, game):
     if re.search(r"\bply\b", written, re.I):
         raise ValueError('it uses the word "ply"; use move numbers')
     for number in MOVE_NUMBER.findall(written):
-        if not 1 <= int(number) <= boards[-1].fullmove_number:
+        if not 1 <= int(number) <= last_move_number(boards):
             raise ValueError(f"move {number} isn't in this game")
     for number, dots, san in NUMBERED.findall(written):
         dots = "..." if dots != "." else "."
@@ -221,6 +230,13 @@ def parse_review(text, game):
         raise ValueError("it mentions mate, but no mate appears in the findings")
     if game["analysis"]["moments"] and not (NUMBERED.search(review["focus"]) or MOVE_NUMBER.search(review["focus"])):
         raise ValueError("focus must cite a move from this game")
+    verifier = motifs.Verifier(game, boards)
+    parts = [review["headline"], review["turning_point"], review["focus"]]
+    parts += [x for sec in sections for x in (sec["text"], sec.get("line", ""))]
+    for sentence in (piece for part in parts for piece in re.split(r"(?<=[a-z0-9)#+!?])\.\s+", part)):
+        wrong = verifier.check_sentence(sentence, NUMBERED)
+        if wrong:
+            raise ValueError(f"the board doesn't show the {wrong} claimed in: {sentence.strip()[:120]}")
     return review
 
 

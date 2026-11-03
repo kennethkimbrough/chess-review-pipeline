@@ -3,7 +3,7 @@ import json
 import chess
 import pytest
 
-from tracker import analyze, build, lichess, review
+from tracker import analyze, build, lichess, motifs, review
 from tracker.store import Store
 
 RAW = {
@@ -290,6 +290,33 @@ def test_refresh_accuracy_only_touches_old_analyses(tmp_path):
     assert analyze.refresh_accuracy(store) == 1
     assert game["analysis"]["acc_v"] == 2
     assert analyze.refresh_accuracy(store) == 0
+
+
+def test_motifs_find_real_patterns():
+    board = chess.Board("4r1k1/pp4b1/2p1r2p/4np2/P1P2B2/1P5P/6P1/3RRBK1 b - - 0 27")
+    kinds = {k for k, _ in motifs.move_motifs(board, board.parse_san("Nf3+"))}
+    assert "discovered attack" in kinds and "discovered check" not in kinds
+    pin = chess.Board("4k3/8/8/8/8/2N1Q3/8/2K4b w - - 0 1")
+    assert not any(k == "pin" for k, _ in motifs.ray_motifs(pin))
+    pinned = chess.Board("r3k2r/ppp1bppp/4b1q1/8/8/2NPQB2/PPP2PPP/2KR3R b kq - 2 14")
+    assert any(k == "pin" and chess.E3 in s for k, s in motifs.move_motifs(pinned, pinned.parse_san("Bg5")))
+
+
+def test_real_fork_is_found():
+    board = chess.Board("3q3k/8/8/4N3/8/8/8/6K1 w - - 0 1")
+    assert any(k == "fork" for k, _ in motifs.move_motifs(board, board.parse_san("Nf7+")))
+    quiet = chess.Board("3q3k/8/8/4N3/8/8/8/6K1 w - - 0 1")
+    assert not any(k == "fork" for k, _ in motifs.move_motifs(quiet, quiet.parse_san("Ng4")))
+
+
+def test_review_rejects_a_pin_the_board_does_not_show():
+    with pytest.raises(ValueError, match="pin"):
+        review.parse_review(good_reply(turning_point="2.Nf3 pinned the rook on a1."), analysed_game())
+
+
+def test_review_rejects_a_move_number_past_the_end():
+    with pytest.raises(ValueError):
+        review.parse_review(good_reply(turning_point="It ended on move 4."), analysed_game())
 
 
 def test_fetch_resumes_with_overlap_and_ignores_duplicates(tmp_path):
