@@ -1,4 +1,7 @@
 {
   "reviews_total": 50,
-  "cost_usd": 0.00728
+  "cost_usd": 0.057625,
+  "spend_by_month": {
+    "2026-11": 0.050346
+  }
 }

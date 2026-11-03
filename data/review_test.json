@@ -1,0 +1,421 @@
+{
+ "model": "google/gemini-3.7-flash",
+ "settings": [
+  "off",
+  "low"
+ ],
+ "games": [
+  {
+   "id": "0GmWWTFt",
+   "speed": "rapid",
+   "color": "black",
+   "result": "win",
+   "opp": "vijayT01",
+   "opening": "Queen's Gambit Declined",
+   "acc": 75.4,
+   "reviews": {
+    "off": {
+     "review": {
+      "headline": "Doubled rooks on the e-file culminate in a decisive discovered attack",
+      "sections": [
+       {
+        "text": "You set up solidly against White's cautious Queen's Gambit setup and timed your central break with 10...e5 well. When White overreached with 11.e4?, you reacted precisely with 11...exd4! followed by 12...dxe4, securing the initiative.",
+        "line": "11.e4 exd4 12.Nxd4 dxe4"
+       },
+       {
+        "text": "The position became sharp after 14...g5?!, leading to a complex skirmish around your king. Although 17...Qc7? gave White dynamic opportunities, your opponent let you off the hook with 18.Nxe4?. You used the chance to stabilize, finding 21...Qe6! to exchange queens and double your rooks along the central e-file.",
+        "line": "21.Rfe1 Qe6 22.Qxe6 Rxe6 23.Bf1 Rae8"
+       },
+       {
+        "text": "With White's rook pinned on e1, a devastating discovered attack was in the air. Both sides missed the tactic on moves 24 and 25, but after White's final mistake 27.Bxf4??, you spotted the knockout with 27...Nf3+!, winning the rook on e1 and prompting an immediate resignation.",
+        "line": "27.Bxf4 Nf3+ 28.gxf3 Rxe1"
+       }
+      ],
+      "turning_point": "White's 27.Bxf4?? stepped directly into the discovered check 27...Nf3+!, winning the e1-rook and collapsing White's position.",
+      "focus": "Look for alignment tactics along open files: spotting the discovered check with 24...Nf3+ would have ended the game three moves earlier.",
+      "model": "google/gemini-3.7-flash",
+      "v": 2,
+      "cost": 0.007556,
+      "at": 1793738853608
+     },
+     "spent": 0.007556,
+     "error": null
+    },
+    "low": {
+     "review": {
+      "headline": "A central skirmish turns into a deadly back-rank discovery",
+      "sections": [
+       {
+        "text": "You handled the Queen's Gambit Declined solidly, coordinating your pieces and breaking open the center with 10...e5. White mistimed the counter-thrust with 11.e4, allowing you to seize central initiative with 11...exd4 followed by 12...dxe4.",
+        "line": "10...e5 11.e4 exd4 12.Nxd4 dxe4"
+       },
+       {
+        "text": "The game grew messy when you pushed 14...g5 and moved your bishop to g7 on move 15, allowing White's knight onto f5. After 17.Rad1, your 17...Qc7 walked into tactical danger, but White bailed you out with 18.Nxe4 instead of jumping in with the crushing Nd6. You then defended well and forced queens off the board with 21...Qe6.",
+        "line": "17...Qc7 18.Nxe4 Bxf5 19.Nxf6+ Bxf6 20.Qxf5 Qe7 21.Rfe1 Qe6"
+       },
+       {
+        "text": "With the rooks aligned on the e-file, White was completely blind to the discoverable pin on the e1-rook. White played passive pawn moves like 24.b3 and 25.a4, but you missed the winning blow twice by playing 24...Bg7 and 25...f5. Finally, after White captured on f4, you spotted the killer strike 27...Nf3+, winning a full rook.",
+        "line": "27.Bxf4 Nf3+ 28.gxf3 Rxe1"
+       }
+      ],
+      "turning_point": "White walked into an absolute disaster with 27.Bxf4, allowing 27...Nf3+ to decisively exploit the pinned rook on e1 and trigger an immediate resignation.",
+      "focus": "Look for discovered tactics whenever heavy pieces line up on an open file; you missed the immediate winning blow 24...Nf3+ before finally executing it on move 27.",
+      "model": "google/gemini-3.7-flash",
+      "v": 2,
+      "cost": 0.003806,
+      "at": 1793738859027
+     },
+     "spent": 0.003806,
+     "error": null
+    }
+   }
+  },
+  {
+   "id": "Tihh8fAh",
+   "speed": "blitz",
+   "color": "white",
+   "result": "loss",
+   "opp": "Alan4141",
+   "opening": "French Defense: Exchange Variation",
+   "acc": 76.2,
+   "reviews": {
+    "off": {
+     "review": {
+      "headline": "A sharp Exchange French undone by overloaded pieces and an unprotected knight",
+      "sections": [
+       {
+        "text": "You went for a classical setup in the Exchange French with 4.Nc3 and 5.Bg5. When Black probed with 5...h6, retreating with 6.Bh4 allowed Black to expand on the kingside with 6...g5 7.Bg3. Trading on f6 with 6.Bxf6 would have disrupted Black's structure and kept the initiative on your side.",
+        "line": "6.Bh4 g5 7.Bg3"
+       },
+       {
+        "text": "After Black traded bishops with 11...Bxf3 12.gxf3, your kingside pawn structure was weakened, and Black redirected their knight via 12...Ne7 toward your center. The first major crack came with 14.Qe2??, which walked directly into 14...Nxd4, dropping the d4-pawn to a straightforward fork.",
+        "line": "14.Qe2 Nxd4 15.Qd3"
+       },
+       {
+        "text": "Black gave you a lifeline with 15...Nxb5??, allowing you to establish a strong outpost with 17.Nd6. However, when Black targeted your dark-squared bishop with 18...Nh5, you doubled rooks with 19.Rae1?? instead of finding safety with 19.Nf5. Black removed the bishop with 19...Nxg3 20.fxg3, leaving the d6-knight completely unprotected for 20...Qxd6.",
+        "line": "19.Rae1 Nxg3 20.fxg3 Qxd6"
+       }
+      ],
+      "turning_point": "19.Rae1?? ignored the threat against your bishop on g3, allowing Black to remove your knight's defender with 19...Nxg3 and win a clean piece on d6.",
+      "focus": "Keep track of the defenders of your advanced pieces; 19.Rae1?? failed because the knight on d6 relied on your queen staying tethered to its defense.",
+      "model": "google/gemini-3.7-flash",
+      "v": 2,
+      "cost": 0.008131,
+      "at": 1793738879708
+     },
+     "spent": 0.008131,
+     "error": null
+    },
+    "low": {
+     "review": {
+      "headline": "Overlooked tactical threats lead to a sudden collapse",
+      "sections": [
+       {
+        "text": "Out of the French Exchange, you developed smoothly until 6.Bh4?, letting Black push you back on the kingside with 6...g5. Simply capturing on f6 with 6.Bxf6 gxf6 would have left Black with a damaged structure and handed you an immediate advantage.",
+        "line": "6.Bh4 g5 7.Bg3 Bg7"
+       },
+       {
+        "text": "The game quickly slipped in the middlegame when you played 14.Qe2??, stepping off the defense of the d4-pawn. Black snatched it with 14...Nxd4. Fortunately, Black returned the favor with 15...Nxb5??, allowing you to stabilize with 16.Nxb5 and anchor your knight on d6.",
+        "line": "14.Qe2 Nxd4 15.Qd3 Nxb5 16.Nxb5"
+       },
+       {
+        "text": "Just as you were back in the game, you doubled rooks with 19.Rae1?? instead of addressing Black's threats. That overlooked the overloaded bishop on g3; after 19...Nxg3 20.fxg3, your knight on d6 fell to 20...Qxd6, dropping a full piece.",
+        "line": "19.Rae1 Nxg3 20.fxg3 Qxd6"
+       }
+      ],
+      "turning_point": "19.Rae1?? neglected the tension against your g3-bishop and left the d6-knight unprotected after trades, allowing Black to win the knight with 20...Qxd6.",
+      "focus": "Always calculate your opponent's direct captures before making routine developing moves like 14.Qe2 or 19.Rae1.",
+      "model": "google/gemini-3.7-flash",
+      "v": 2,
+      "cost": 0.002705,
+      "at": 1793738884306
+     },
+     "spent": 0.002705,
+     "error": null
+    }
+   }
+  },
+  {
+   "id": "Q4A5pWup",
+   "speed": "blitz",
+   "color": "black",
+   "result": "loss",
+   "opp": "MauHdez",
+   "opening": "Queen's Pawn Game: London System, with e6",
+   "acc": 46.8,
+   "reviews": {
+    "off": {
+     "review": {
+      "headline": "A textbook kingside destruction spoiled by a single heartbreaking blind spot",
+      "sections": [
+       {
+        "text": "Against the London System, you handled the opening sensibly by trading off White's dark-squared bishop with 6...Nxg3 and grabbing space on the queenside with ...c5 and ...c4. White made a fatal strategic error by choosing 12.O-O-O?? right into your pawn storm, and you punished it immediately with 12...Qa5!. When White weakened their king further with 13.a3??, you cracked open the shelter with the crushing sacrifice 13...Bxa3! 14.bxa3 Qxa3+ 15.Kb1.",
+        "line": "12.O-O-O Qa5 13.a3 Bxa3 14.bxa3 Qxa3+ 15.Kb1"
+       },
+       {
+        "text": "Your follow-up attack was ruthless. You rolled forward with 15...b5 and 16...b4, shredding White's defensive lines. After 18.cxb4 Nxb4, your knight joined your queen to completely overwhelm White's king, leaving White with no defense against mate.",
+        "line": "15...b5 16.Ng5 b4 17.Qf3 Rf8 18.cxb4 Nxb4 19.e4"
+       },
+       {
+        "text": "Then came the tragedy. You had an instant forced mate starting with 19...Qa2+ 20.Kc1 Qxc2#. Instead, aiming to bring another piece into the assault, you played 19...Rb8??. In your rush to pile on pressure, you overlooked that your queen on a3 was unguarded, allowing 20.Qxa3 and losing the game on the spot."
+       }
+      ],
+      "turning_point": "On move 19, you were one move away from delivering checkmate with 19...Qa2+, but 19...Rb8?? hung your queen to 20.Qxa3 and turned a forced win into an immediate loss.",
+      "focus": "When conducting a winning attack, always calculate forcing checks like 19...Qa2+ first before playing 'quiet' developing moves like 19...Rb8 that might leave your key attackers hanging.",
+      "model": "google/gemini-3.7-flash",
+      "v": 2,
+      "cost": 0.006926,
+      "at": 1793738902443
+     },
+     "spent": 0.006926,
+     "error": null
+    },
+    "low": {
+     "review": {
+      "headline": "A brilliant queenside attack thrown away on the brink of checkmate",
+      "sections": [
+       {
+        "text": "Against your opponent's London System, you handled the opening sensibly with 5...Ne4 and exchanged on g3. When White made the dangerous decision to castle queenside with 12.O-O-O, you immediately pounced with 12...Qa5! to target the exposed king.",
+        "line": "12.O-O-O Qa5 13.a3"
+       },
+       {
+        "text": "White's 13.a3 gave you the green light to crack the shell, and you executed the thematic sacrifice 13...Bxa3! with conviction. After 14.bxa3 Qxa3+ 15.Kb1, you surged your pawns forward with 15...b5 and 16...b4, putting White under overwhelming pressure.",
+        "line": "13...Bxa3 14.bxa3 Qxa3+ 15.Kb1 b5 16.Ng5 b4"
+       },
+       {
+        "text": "White cracked with 17.Qf3, and after 18.cxb4 Nxb4, your attack was completely winning. All that was needed to seal the masterpiece was delivering mate with 19...Qa2+ 20.Kc1 Qxc2#. Instead, 19...Rb8?? hung your queen to 20.Qxa3, reversing the result instantly.",
+        "line": "18...Nxb4 19.e4 Rb8 20.Qxa3"
+       }
+      ],
+      "turning_point": "On move 19, instead of playing the simple mating sequence starting with 19...Qa2+, you played 19...Rb8??, leaving your queen hanging on a3.",
+      "focus": "Always calculate your most direct checks first in mating attacks before bringing in extra pieces, as missed on 19...Rb8.",
+      "model": "google/gemini-3.7-flash",
+      "v": 2,
+      "cost": 0.002996,
+      "at": 1793738907048
+     },
+     "spent": 0.002996,
+     "error": null
+    }
+   }
+  },
+  {
+   "id": "WJXrCAiL",
+   "speed": "bullet",
+   "color": "white",
+   "result": "win",
+   "opp": "Vicky202506",
+   "opening": "Scandinavian Defense: Mieses-Kotroc Variation",
+   "acc": 65.3,
+   "reviews": {
+    "off": {
+     "review": {
+      "headline": "A sharp bullet fight decided on the clock after a wild tactical flurry",
+      "sections": [
+       {
+        "text": "Black brought their queen out early, and you capitalized when they overextended with 8...Nd4. You found 9.Nxd4! exd4 10.Bxd4, converting their tactical mistake into a clean extra central pawn.",
+        "line": "8...Nd4 9.Nxd4 exd4 10.Bxd4"
+       },
+       {
+        "text": "The middlegame turned messy after 13...Be6. Instead of snatching the free pawn with 14.Bxb7, you rushed with 14.O-O-O??, walking into a deadly pin with 14...Bg5. Black failed to spot the tactic and answered with 14...c6??, letting you escape unharmed before they flagged.",
+        "line": "14.O-O-O c6 15.Kb1"
+       }
+      ],
+      "turning_point": "14.O-O-O?? gave Black a winning pin with 14...Bg5, but Black's mistake 14...c6?? immediately let you off the hook.",
+      "focus": "Scan for absolute pins along open diagonals before castling, as 14.O-O-O stepped right into the alignment of Black's dark-squared bishop.",
+      "model": "google/gemini-3.7-flash",
+      "v": 2,
+      "cost": 0.007371,
+      "at": 1793738920466
+     },
+     "spent": 0.007371,
+     "error": null
+    },
+    "low": {
+     "review": {
+      "headline": "A sharp bullet scramble decided on the clock after missed tactical shots",
+      "sections": [
+       {
+        "text": "Your opponent brought their queen out early, and you responded solidly by developing pieces. After they blundered with 8...Nd4, you reacted cleanly with 9.Nxd4 exd4 10.Bxd4, winning a central pawn and opening the board in your favor.",
+        "line": "8...Nd4 9.Nxd4 exd4 10.Bxd4"
+       },
+       {
+        "text": "Things got chaotic quickly. After 13...Be6, you could have punished Black immediately with 14.Bxb7, winning a second pawn. Instead, 14.O-O-O walked into tactical danger, but Black missed the skewer 14...Bg5 and played 14...c6, handing you back the advantage before flagging on move 20."
+       }
+      ],
+      "turning_point": "Black gave you the upper hand with 8...Nd4, allowing you to pocket an extra central pawn with 9.Nxd4.",
+      "focus": "Scan for undefended loose pieces before castling into tactics, such as spotting 14.Bxb7 instead of rushing into 14.O-O-O.",
+      "model": "google/gemini-3.7-flash",
+      "v": 2,
+      "cost": 0.002293,
+      "at": 1793738923584
+     },
+     "spent": 0.002293,
+     "error": null
+    }
+   }
+  },
+  {
+   "id": "E2mmQ6Om",
+   "speed": "bullet",
+   "color": "black",
+   "result": "win",
+   "opp": "Gassem_M",
+   "opening": "Blackmar-Diemer Gambit Declined: Weinsbach Defense",
+   "acc": 93.3,
+   "reviews": {
+    "off": {
+     "review": {
+      "headline": "Sharp tactical alert punishes White's overextended center",
+      "sections": [
+       {
+        "text": "After a slight slip with 4...dxe4, you pounced on White's premature pawn advance. When White played 6.e5?, you found 6...Nd5! and followed up with 7...Qh4+! to shatter their kingside, win the d4-pawn, and force advantageous queen trades.",
+        "line": "6...Nd5 7.Bd2 Qh4+ 8.g3 Qxd4"
+       },
+       {
+        "text": "You systematically dismantled White's position, winning a knight after 22...fxe5 and 23...Rxf3+. Once the rooks came off with 46...Rxh3+, your connected queenside pawns marched down the board to deliver checkmate on move 64."
+       }
+      ],
+      "turning_point": "7...Qh4+! immediately exploited White's weakened kingside to win central material and seize lasting command.",
+      "focus": "Instead of releasing tension early with 4...dxe4, look to contest the center dynamically with 4...c5.",
+      "model": "google/gemini-3.7-flash",
+      "v": 2,
+      "cost": 0.005068,
+      "at": 1793738932911
+     },
+     "spent": 0.005068,
+     "error": null
+    },
+    "low": {
+     "review": {
+      "headline": "Punishing an Unsound Opening with Relentless Tactictal Pressure",
+      "sections": [
+       {
+        "text": "White played an aggressive setup with 2.f3 and 4.e4, but overextended quickly. After 6.e5?, you found the active 6...Nd5! and punished 7.Bd2? immediately with 7...Qh4+!, picking up a clean central pawn on d4.",
+        "line": "6.e5 Nd5 7.Bd2 Qh4+ 8.g3 Qxd4"
+       },
+       {
+        "text": "White blundered further with 9.a3??, allowing you to liquidate into a dominating endgame. You methodically opened lines with 19...f6 and stripped away White's defenses, winning the f3-knight with 23...Rxf3+.",
+        "line": "22...fxe5 23.Kg3 Rxf3+ 24.Kh4 e4"
+       },
+       {
+        "text": "In the rook ending, you marched your king forward and traded off White's active rook on move 46. From there, your passed queenside pawns marched down effortlessly, concluding with 62...c1=Q+ and 63...Qb2#."
+       }
+      ],
+      "turning_point": "White's overextension with 6.e5? allowed your counterstrike 6...Nd5! and 7...Qh4+!, handing you a decisive advantage and the initiative.",
+      "focus": "Look for central counterstrikes instead of passive captures: 4...c5 challenges White's setup more effectively than 4...dxe4?.",
+      "model": "google/gemini-3.7-flash",
+      "v": 2,
+      "cost": 0.003493,
+      "at": 1793738936726
+     },
+     "spent": 0.003493,
+     "error": null
+    }
+   }
+  }
+ ],
+ "stopped": null,
+ "accuracy_check": [
+  {
+   "id": "Tihh8fAh",
+   "lichess": 74,
+   "ours": 76.2
+  },
+  {
+   "id": "Q4A5pWup",
+   "lichess": 48,
+   "ours": 46.8
+  },
+  {
+   "id": "J5VHhErH",
+   "lichess": 49,
+   "ours": 65.8
+  },
+  {
+   "id": "oj5Jremo",
+   "lichess": 71,
+   "ours": 71.7
+  },
+  {
+   "id": "VuBYiXBr",
+   "lichess": 73,
+   "ours": 77.1
+  },
+  {
+   "id": "reYiEYcJ",
+   "lichess": 57,
+   "ours": 62.0
+  },
+  {
+   "id": "5GVtifQz",
+   "lichess": 92,
+   "ours": 90.3
+  },
+  {
+   "id": "0AEDsuFh",
+   "lichess": 71,
+   "ours": 79.1
+  },
+  {
+   "id": "zZSnYyl4",
+   "lichess": 89,
+   "ours": 88.8
+  },
+  {
+   "id": "0GmWWTFt",
+   "lichess": 77,
+   "ours": 75.4
+  },
+  {
+   "id": "ye5ntcNw",
+   "lichess": 49,
+   "ours": 47.6
+  },
+  {
+   "id": "sB6NTvpl",
+   "lichess": 94,
+   "ours": 94.3
+  },
+  {
+   "id": "xCneMwdt",
+   "lichess": 81,
+   "ours": 82.5
+  },
+  {
+   "id": "8Jr04VFi",
+   "lichess": 66,
+   "ours": 65.8
+  },
+  {
+   "id": "LgHYTvGx",
+   "lichess": 62,
+   "ours": 73.0
+  },
+  {
+   "id": "gyvBoUZO",
+   "lichess": 72,
+   "ours": 66.4
+  },
+  {
+   "id": "EheXM5o4",
+   "lichess": 67,
+   "ours": 69.5
+  },
+  {
+   "id": "vQwe3JsF",
+   "lichess": 77,
+   "ours": 74.7
+  },
+  {
+   "id": "lKz4AiT2",
+   "lichess": 88,
+   "ours": 87.9
+  },
+  {
+   "id": "u87jOP8i",
+   "lichess": 57,
+   "ours": 52.9
+  }
+ ]
+}
