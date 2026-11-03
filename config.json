@@ -10,11 +10,11 @@
     "input": 0.75,
     "output": 3.75
   },
-  "reasoning": "off",
-  "reviews_enabled": false,
+  "reasoning": "low",
+  "reviews_enabled": true,
   "review_latest": 50,
   "monthly_limit_usd": 5.0,
-  "run_review_test": true,
+  "run_review_test": false,
   "test_games": 5,
   "test_settings": [
     "off",

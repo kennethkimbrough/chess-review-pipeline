@@ -56,19 +56,14 @@ def main():
     test_path = ROOT / "data" / "review_test.json"
     if config.get("run_review_test") and key and not test_path.exists():
         run_review_test(store, config, key, args, test_path)
-    analysed = 0
-    if any("analysis" not in g for g in store.games.values()):
-        # Reviews get the last slice of the run so each run publishes some.
-        analysed = analyze.analyse_pending(
-            store, args.engine, config["engine_nodes"], args.workers,
-            start + (args.minutes * 60) * 0.9,
-        )
     reviewed = 0
     if config.get("reviews_enabled"):
+        # Games due a review come first; the older backlog takes whatever time is left.
         stale = [g for g in review.in_scope(store, config) if review.needs_analysis(g)]
         if stale:
             analyze.analyse_pending(store, args.engine, config["engine_nodes"], args.workers, deadline, games=stale)
         reviewed = review.review_pending(store, config, key, deadline)
+    analysed = analyze.analyse_pending(store, args.engine, config["engine_nodes"], args.workers, deadline)
     pending = sum("analysis" not in g for g in store.games.values())
     print(
         f"New games {added}, analysed {analysed}, reviewed {reviewed}. "

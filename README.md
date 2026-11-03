@@ -10,7 +10,7 @@ Every two hours a GitHub Action:
 
 1. Downloads new games from the public Lichess API.
 2. Runs Stockfish 17.1 on each position (100,000 nodes) to find mistakes, blunders and the moves the engine preferred.
-3. Sends the annotated game to `google/gemini-3.7-flash` through OpenRouter for a review of how the game unfolded. A review citing a move that isn't in the game or an engine line is rejected and retried. Reviews cover the latest 50 games at setup and every game after them.
+3. Sends the annotated game to `google/gemini-3.7-flash` through OpenRouter for a review of how the game unfolded. A review is rejected and retried if it cites a move that isn't in the game or an engine line, or names a pin, skewer, fork, discovered attack or back-rank tactic the board doesn't show. Reviews cover the latest 50 games at setup and every game after them.
 4. Commits the results to `data/` and publishes the site from `site/`.
 
 A run with no new games changes nothing and costs nothing. Older games are analysed newest first across runs and count toward the stats. If the repo has been quiet for 50 days, a small commit keeps the schedule from being disabled.
