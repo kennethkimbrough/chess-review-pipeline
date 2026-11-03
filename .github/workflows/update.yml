@@ -1,0 +1,86 @@
+name: Update games
+
+on:
+  schedule:
+    - cron: "17 */2 * * *"
+  push:
+    branches: [main]
+    paths: ["site/**", "tracker/**", "config.json", "requirements.txt", ".github/workflows/update.yml"]
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: Time limit in minutes
+        default: "30"
+
+concurrency:
+  group: update-games
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Install Stockfish
+        run: |
+          curl -fsSL -o sf.tar https://github.com/official-stockfish/Stockfish/releases/download/sf_17.1/stockfish-ubuntu-x86-64-avx2.tar
+          tar xf sf.tar
+          rm sf.tar
+          echo "STOCKFISH_PATH=$PWD/stockfish/stockfish-ubuntu-x86-64-avx2" >> "$GITHUB_ENV"
+      - name: Fetch, analyse and review
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MINUTES: ${{ github.event_name == 'schedule' && '100' || github.event.inputs.minutes || '30' }}
+        run: python -m tracker run --minutes "$MINUTES"
+      - name: Save results
+        if: always()
+        id: save
+        run: |
+          git config user.name "Kenneth Kimbrough"
+          git config user.email "146112017+kennethkimbrough@users.noreply.github.com"
+          last=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - last )) -gt $(( 50 * 86400 )) ]; then
+            date -u +%F > data/keepalive.txt
+          fi
+          git add data
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -q -m "Update games $(date -u +%F)"
+            git pull -q --rebase origin main
+            git push -q origin HEAD:main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build site
+        if: always() && (steps.save.outputs.changed == 'true' || github.event_name != 'schedule')
+        id: site
+        run: python -m tracker build
+      - uses: actions/upload-pages-artifact@v3
+        if: always() && steps.site.outcome == 'success'
+        with:
+          path: site
+    outputs:
+      built: ${{ steps.site.outcome }}
+
+  deploy:
+    needs: update
+    if: always() && needs.update.outputs.built == 'success'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
