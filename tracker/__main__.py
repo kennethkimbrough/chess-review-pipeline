@@ -11,6 +11,26 @@ from .store import Store
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def run_review_test(store, config, key, args, path):
+    picks = review.pick_test_games(store, config["test_games"])
+    limit = time.time() + 600
+    analyze.analyse_pending(store, args.engine, config["engine_nodes"], args.workers, limit,
+                            games=[g for g in picks if review.needs_analysis(g)])
+    output = review.run_test(store, config, key)
+    try:
+        lichess_accuracy = lichess.fetch_lichess_accuracy(config["username"])
+        known = [store.games[i] for i in lichess_accuracy if i in store.games]
+        analyze.analyse_pending(store, args.engine, config["engine_nodes"], args.workers, time.time() + 300,
+                                games=[g for g in known if review.needs_analysis(g)])
+        output["accuracy_check"] = [
+            {"id": g["id"], "lichess": lichess_accuracy[g["id"]], "ours": g["analysis"].get("acc")} for g in known
+        ]
+    except Exception as error:
+        output["accuracy_check_error"] = str(error)
+    path.write_text(json.dumps(output, indent=1, ensure_ascii=False) + "\n")
+    store.save()
+
+
 def main():
     parser = argparse.ArgumentParser(prog="tracker")
     parser.add_argument("command", choices=["run", "build"])
@@ -28,7 +48,14 @@ def main():
     start = time.time()
     deadline = start + args.minutes * 60
     added = lichess.fetch_new(store, config["username"], deadline)
+    refreshed = analyze.refresh_accuracy(store)
+    if refreshed:
+        print(f"Refreshed accuracy for {refreshed} games")
     store.save()
+    key = os.environ.get("OPENROUTER_API_KEY")
+    test_path = ROOT / "data" / "review_test.json"
+    if config.get("run_review_test") and key and not test_path.exists():
+        run_review_test(store, config, key, args, test_path)
     analysed = 0
     if any("analysis" not in g for g in store.games.values()):
         # Reviews get the last slice of the run so each run publishes some.
@@ -36,7 +63,12 @@ def main():
             store, args.engine, config["engine_nodes"], args.workers,
             start + (args.minutes * 60) * 0.9,
         )
-    reviewed = review.review_pending(store, config, os.environ.get("OPENROUTER_API_KEY"), deadline)
+    reviewed = 0
+    if config.get("reviews_enabled"):
+        stale = [g for g in review.in_scope(store, config) if review.needs_analysis(g)]
+        if stale:
+            analyze.analyse_pending(store, args.engine, config["engine_nodes"], args.workers, deadline, games=stale)
+        reviewed = review.review_pending(store, config, key, deadline)
     pending = sum("analysis" not in g for g in store.games.values())
     print(
         f"New games {added}, analysed {analysed}, reviewed {reviewed}. "

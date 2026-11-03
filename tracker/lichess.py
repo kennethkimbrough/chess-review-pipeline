@@ -95,3 +95,26 @@ def fetch_new(store, username, deadline, session=None, base=API):
                 params["since"] = store.newest_at() - OVERLAP_MS
             time.sleep(10)
     return added
+
+
+def fetch_lichess_accuracy(username, limit=20, session=None, base=API):
+    """Returns {game id: accuracy} for the player's games already analysed on Lichess."""
+    session = session or requests.Session()
+    params = {"analysed": "true", "accuracy": "true", "moves": "false", "tags": "false", "evals": "false", "max": limit}
+    result = {}
+    with session.get(
+        base.format(user=username), params=params, stream=True, timeout=120,
+        headers={"Accept": "application/x-ndjson", "User-Agent": "pinkroses-lichess"},
+    ) as response:
+        response.raise_for_status()
+        for line in response.iter_lines():
+            if not line:
+                continue
+            raw = json.loads(line)
+            for side in ("white", "black"):
+                player = raw.get("players", {}).get(side, {})
+                if str((player.get("user") or {}).get("id", "")).lower() == username.lower():
+                    accuracy = (player.get("analysis") or {}).get("accuracy")
+                    if accuracy is not None:
+                        result[raw["id"]] = accuracy
+    return result

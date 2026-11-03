@@ -1,6 +1,7 @@
 """Game storage: one JSON Lines file per month, plus a small state file."""
 import json
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -44,6 +45,9 @@ class Store:
         with self.lock:
             self.state["reviews_total"] += 1 if counted else 0
             self.state["cost_usd"] = round(self.state["cost_usd"] + cost, 6)
+            month = month_of(int(time.time() * 1000))
+            spend = self.state.setdefault("spend_by_month", {})
+            spend[month] = round(spend.get(month, 0) + cost, 6)
             self.state_changed = True
 
     def newest_at(self):

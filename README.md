@@ -10,12 +10,12 @@ Every two hours a GitHub Action:
 
 1. Downloads new games from the public Lichess API.
 2. Runs Stockfish 17.1 on each position (100,000 nodes) to find mistakes, blunders and the moves the engine preferred.
-3. Sends those findings to `google/gemini-2.5-flash-lite` through OpenRouter for a short review. A review that mentions a piece move missing from the game and the findings is rejected and retried.
+3. Sends the annotated game to `google/gemini-3.7-flash` through OpenRouter for a review of how the game unfolded. A review citing a move that isn't in the game or an engine line is rejected and retried. Reviews cover the latest 50 games at setup and every game after them.
 4. Commits the results to `data/` and publishes the site from `site/`.
 
-A run with no new games changes nothing and costs nothing. Older games are worked through newest first across runs. If the repo has been quiet for 50 days, a small commit keeps the schedule from being disabled.
+A run with no new games changes nothing and costs nothing. Older games are analysed newest first across runs and count toward the stats. If the repo has been quiet for 50 days, a small commit keeps the schedule from being disabled.
 
-Accuracy uses the Lichess per-move formula but averages it simply, so it can differ from the figure Lichess shows.
+Accuracy follows the Lichess method, but on separate engine analysis, so it can differ slightly from the figure Lichess shows.
 
 ## Setup
 
@@ -29,8 +29,11 @@ All of these are in `config.json`:
 
 | Setting | Meaning |
 |---|---|
-| `max_reviews_total` | Stops after this many reviews in total. Set to `null` for no count limit. |
-| `max_cost_usd` | Stops reviews once tracked spending reaches this amount. |
+| `reviews_enabled` | Turns ongoing reviews on or off. |
+| `review_latest` | How many recent games to review when reviews first start. |
+| `monthly_limit_usd` | Pauses reviews until next month after this much spending. |
+| `max_cost_usd` | Stops reviews once total tracked spending reaches this amount. |
+| `reasoning` | Extra model reasoning: `off`, `low`, `medium` or `high`. |
 | `model` | Any OpenRouter model id. |
 | `engine_nodes` | Stockfish search size per position. |
 | `goal_rating` | The target shown on the site. |

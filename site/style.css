@@ -38,6 +38,9 @@ section { margin-top: 44px; }
 .meta { color: var(--soft); margin-bottom: 14px; }
 .verdict { font-weight: 700; }
 .verdict.win { color: var(--win); } .verdict.loss { color: var(--loss); } .verdict.draw { color: var(--draw); }
+.headline { font-weight: 700; font-size: 1.12rem; }
+.line { margin: -.2rem 0 .9rem; }
+.linkline { background: none; border: 0; padding: 2px 0; min-height: 36px; font-weight: 700; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
 .review h3 { font-size: 1.08rem; margin: 18px 0 4px; }
 .focus { background: var(--panel); border-left: 4px solid var(--rose); padding: 12px 14px; margin-top: 16px; }
 .focus h3 { margin-top: 0; }
