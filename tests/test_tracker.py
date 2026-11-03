@@ -67,6 +67,9 @@ def test_analysis_only_counts_the_players_moves():
     game = game_record(moves="e4 e5 Nf3 d5", clocks=[300, 300, 5, 290], init=300)
     engine = FakeEngine([20, 20, 20, -500, 900], {2: "Nc3"})
     result = analyze.analyse_game(game, engine, 1000, "SF")
+    assert result["opponent_moments"][0]["san"] == "d5"
+    assert result["version"] == analyze.VERSION
+    assert "2" in result["lines"]
     assert result["counts"]["blunder"] == 1
     moment = result["moments"][0]
     assert (moment["ply"], moment["san"], moment["best"]) == (3, "Nf3", "Nc3")
@@ -103,40 +106,54 @@ def test_hangs_piece_detects_a_free_capture_only():
 
 
 def analysed_game():
-    game = game_record(moves="e4 e5 Nf3 d5", clocks=None)
+    game = game_record(moves="e4 e5 Nf3 d5 exd5 Qxd5", clocks=None)
     game["analysis"] = {
-        "acc": 70.0, "counts": {"inaccuracy": 0, "mistake": 0, "blunder": 1},
-        "phases": {"opening": 1, "middlegame": 0, "endgame": 0}, "evals": [0, 0, 0, -500, 0],
+        "version": analyze.VERSION, "acc": 70.0, "counts": {"inaccuracy": 0, "mistake": 0, "blunder": 1},
+        "phases": {"opening": 1, "middlegame": 0, "endgame": 0}, "evals": [0, 0, 0, -500, 0, 0, 0],
         "moments": [{"ply": 3, "san": "Nf3", "best": "Nc3", "cat": "blunder", "before": 20, "after": -500,
                      "phase": "opening", "tags": ["hung_piece"], "clock": None}],
+        "opponent_moments": [{"ply": 4, "san": "d5", "best": "Nc6", "cat": "mistake", "before": -500, "after": 0, "punished": True}],
+        "highlights": [{"ply": 5, "san": "exd5", "why": "best reply to the error"}],
+        "lines": {"2": "2. Nc3 Nf6 3. Bc4"},
     }
     return game
 
 
 def good_reply(**changes):
-    body = {"summary": "You drifted after Nf3.", "turning_point": "Nf3 lost material; Nc3 was better.",
-            "moments": [{"ply": 3, "note": "Nf3 left a piece to be won."}], "focus": "Check captures first."}
+    body = {"headline": "A sharp fight decided early.",
+            "sections": [{"text": "You chose 2.Nf3 when Nc3 was better, then 3.exd5 hit back.", "line": "2.Nf3 d5 3.exd5 Qxd5"}],
+            "turning_point": "2.Nf3 swung the game.", "focus": "Compare candidates before moves like 2.Nf3."}
     body.update(changes)
     return json.dumps(body)
 
 
-def test_prompt_contains_findings_with_correct_numbering():
+def test_prompt_has_the_annotated_game_and_engine_lines():
     text = review.build_prompt(analysed_game())
-    assert "2. Nf3 was a blunder" in text
-    assert "Engine preferred Nc3" in text
-    assert "left a piece" in text
+    assert "2.Nf3?? (-5.0)" in text
+    assert "2...d5? (+0.0)" in text
+    assert "3.exd5!" in text
+    assert "Engine line instead: 2. Nc3 Nf6 3. Bc4" in text
+    assert "Position before it:" in text
+
+
+def test_prompt_marks_material_changes():
+    assert "[material" in review.build_prompt(analysed_game())
 
 
 def test_parse_accepts_good_and_fenced_json():
     game = analysed_game()
-    assert review.parse_review(good_reply(), game)["moments"][0]["ply"] == 3
+    assert review.parse_review(good_reply(), game)["sections"][0]["line"]
     assert review.parse_review("```json\n" + good_reply() + "\n```", game)["focus"]
 
 
 @pytest.mark.parametrize("reply", [
-    good_reply(summary="Instead of Nf3, Qh5 wins."),
-    good_reply(moments=[{"ply": 9, "note": "Nope"}]),
-    good_reply(focus=""),
+    good_reply(headline="Instead of 2.Nf3, Qh5 won."),
+    good_reply(focus="Work on opening principles."),
+    good_reply(focus="Check 7.Nf3 next time."),
+    good_reply(turning_point="The move on ply 3 mattered."),
+    good_reply(turning_point="Move 16 mattered."),
+    good_reply(sections=[]),
+    good_reply(turning_point="You lost a queen and it was mate."),
     "not json",
 ])
 def test_parse_rejects_invented_or_malformed_reviews(reply):
@@ -183,7 +200,7 @@ def ok(cost=0.001):
 
 
 CONFIG = {"model": "m", "review_max_tokens": 100, "price_per_million": {"input": 0.1, "output": 0.4},
-          "max_cost_usd": 1.0, "max_reviews_total": None, "review_workers": 1}
+          "max_cost_usd": 1.0, "monthly_limit_usd": 1.0, "review_latest": 2, "review_workers": 1, "reasoning": "off"}
 
 
 def make_store(tmp_path, count):
@@ -199,24 +216,38 @@ def far():
     return float("inf")
 
 
-def test_reviews_stop_at_the_count_limit_and_track_cost(tmp_path):
+def test_reviews_cover_latest_games_then_every_new_game(tmp_path):
     store = make_store(tmp_path, 5)
-    session = FakeSession([ok(), ok()])
-    done = review.review_pending(store, {**CONFIG, "max_reviews_total": 2}, "k", far(), session)
-    assert done == 2
-    assert store.state["reviews_total"] == 2
-    assert store.state["cost_usd"] == pytest.approx(0.002)
-    assert "review" in store.games["g4"] and "review" not in store.games["g0"]
+    assert review.review_pending(store, CONFIG, "k", far(), FakeSession([ok(), ok()])) == 2
+    assert "review" in store.games["g4"] and "review" in store.games["g3"] and "review" not in store.games["g2"]
+    newer = analysed_game()
+    newer["id"], newer["at"] = "g9", RAW["createdAt"] + 100
+    store.add(newer)
+    assert review.review_pending(store, CONFIG, "k", far(), FakeSession([ok()])) == 1
+    assert "review" in store.games["g9"] and "review" not in store.games["g2"]
 
 
-def test_reviews_stop_at_the_spending_limit(tmp_path):
-    store = make_store(tmp_path, 5)
+def test_old_style_reviews_are_replaced(tmp_path):
+    store = make_store(tmp_path, 1)
+    store.games["g0"]["review"] = {"summary": "old"}
+    assert review.review_pending(store, CONFIG, "k", far(), FakeSession([ok()])) == 1
+    assert store.games["g0"]["review"]["v"] == review.REVIEW_VERSION
+
+
+def test_reviews_pause_at_the_monthly_limit(tmp_path):
+    store = make_store(tmp_path, 2)
     session = FakeSession([ok(0.6), ok(0.6)])
-    assert review.review_pending(store, CONFIG, "k", far(), session) == 2
+    assert review.review_pending(store, {**CONFIG, "monthly_limit_usd": 0.5, "review_latest": 2}, "k", far(), session) == 1
+    assert store.state["spend_by_month"][review.month_key()] == pytest.approx(0.6)
+
+
+def test_reviews_stop_at_the_total_limit(tmp_path):
+    store = make_store(tmp_path, 3)
+    assert review.review_pending(store, {**CONFIG, "review_latest": 3, "max_cost_usd": 0.5}, "k", far(), FakeSession([ok(0.6)])) == 1
 
 
 def test_no_credits_stops_everything_and_saves_nothing_bad(tmp_path):
-    store = make_store(tmp_path, 3)
+    store = make_store(tmp_path, 2)
     session = FakeSession([FakeResponse(402, {"error": "no credits"})])
     assert review.review_pending(store, CONFIG, "k", far(), session) == 0
     assert len(session.calls) == 1
@@ -227,12 +258,38 @@ def test_missing_key_skips_reviews(tmp_path):
     assert review.review_pending(make_store(tmp_path, 1), CONFIG, None, far()) == 0
 
 
-def test_bad_reply_is_retried_and_its_cost_counted(tmp_path, monkeypatch):
+def test_rejected_reply_is_sent_back_with_the_reason_and_cost_counted(tmp_path, monkeypatch):
     monkeypatch.setattr(review.time, "sleep", lambda s: None)
     store = make_store(tmp_path, 1)
-    bad = FakeResponse(200, {"choices": [{"message": {"content": "nope"}}], "usage": {"cost": 0.01}})
-    assert review.review_pending(store, CONFIG, "k", far(), FakeSession([bad, ok(0.01)])) == 1
+    bad = FakeResponse(200, {"choices": [{"message": {"content": good_reply(headline="Qh5 won.")}}], "usage": {"cost": 0.01}})
+    session = FakeSession([bad, ok(0.01)])
+    assert review.review_pending(store, CONFIG, "k", far(), session) == 1
     assert store.state["cost_usd"] == pytest.approx(0.02)
+    assert "rejected" in session.calls[1]["messages"][-1]["content"]
+
+
+def test_unsupported_reasoning_setting_falls_back(tmp_path, monkeypatch):
+    monkeypatch.setattr(review.time, "sleep", lambda s: None)
+    store = make_store(tmp_path, 1)
+    session = FakeSession([FakeResponse(400, {"error": "bad"}), ok()])
+    assert review.review_pending(store, CONFIG, "k", far(), session) == 1
+
+
+def test_game_accuracy_punishes_blunders_more_than_a_plain_average():
+    clean = analyze.game_accuracy([20] * 41, True, True)
+    swung = analyze.game_accuracy([20] * 21 + [-500] * 20, True, True)
+    assert clean > 98
+    assert swung < clean - 10
+    assert analyze.game_accuracy([20] * 41, True, False) > 98
+
+
+def test_refresh_accuracy_only_touches_old_analyses(tmp_path):
+    store = make_store(tmp_path, 1)
+    game = store.games["g0"]
+    game["analysis"].pop("version")
+    assert analyze.refresh_accuracy(store) == 1
+    assert game["analysis"]["acc_v"] == 2
+    assert analyze.refresh_accuracy(store) == 0
 
 
 def test_fetch_resumes_with_overlap_and_ignores_duplicates(tmp_path):

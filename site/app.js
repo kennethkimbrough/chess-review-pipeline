@@ -77,12 +77,31 @@ function boardHTML(fen, flip, mark, label) {
 function reviewHTML(detail, showMoments) {
   const r = detail.review;
   if (!r) return "";
+  if (r.sections) {
+    const parts = r.sections.map((sec) => {
+      const line = sec.line ? `<p class="line">${lineHTML(sec.line, detail, showMoments)}</p>` : "";
+      return `<p>${esc(sec.text)}</p>${line}`;
+    }).join("");
+    return `<div class="review"><p class="headline">${esc(r.headline)}</p>${parts}<h3>Turning point</h3><p>${esc(r.turning_point)}</p><div class="focus"><h3>Work on this</h3><p>${esc(r.focus)}</p></div></div>`;
+  }
   const notes = showMoments && r.moments && r.moments.length
     ? `<h3>Moments to look at</h3><ul class="moments">${r.moments.map((m) => {
         const found = (detail.moments || []).find((x) => x.ply === m.ply);
         return `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(found ? found.san : "")}</b><span class="why">${esc(m.note)}</span></button></li>`;
       }).join("")}</ul>` : "";
   return `<div class="review"><p>${esc(r.summary)}</p><h3>Turning point</h3><p>${esc(r.turning_point)}</p>${notes}<div class="focus"><h3>Work on this</h3><p>${esc(r.focus)}</p></div></div>`;
+}
+
+function lineHTML(line, detail, clickable) {
+  const first = line.match(/(\d+)(\.{1,3})\s?([^\s]+)/);
+  const sans = (detail.moves || "").split(" ");
+  if (clickable && first) {
+    const ply = (+first[1] - 1) * 2 + (first[2] === "." ? 1 : 2);
+    if (!detail.fen && sans[ply - 1] && sans[ply - 1].replace(/[+#]/g, "") === first[3].replace(/[+#!?]/g, "")) {
+      return `<button class="linkline" data-ply="${ply}">${esc(line)}</button>`;
+    }
+  }
+  return `<b>${esc(line)}</b>`;
 }
 
 function headline(row) {

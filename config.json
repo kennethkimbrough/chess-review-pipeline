@@ -2,10 +2,22 @@
   "username": "PinkRoses",
   "goal_rating": 1500,
   "engine_nodes": 100000,
-  "model": "google/gemini-2.5-flash-lite",
-  "max_reviews_total": 50,
+  "model": "google/gemini-3.7-flash",
   "max_cost_usd": 8.0,
   "review_workers": 4,
-  "review_max_tokens": 700,
-  "price_per_million": {"input": 0.10, "output": 0.40}
+  "review_max_tokens": 3000,
+  "price_per_million": {
+    "input": 0.75,
+    "output": 3.75
+  },
+  "reasoning": "off",
+  "reviews_enabled": false,
+  "review_latest": 50,
+  "monthly_limit_usd": 5.0,
+  "run_review_test": true,
+  "test_games": 5,
+  "test_settings": [
+    "off",
+    "low"
+  ]
 }

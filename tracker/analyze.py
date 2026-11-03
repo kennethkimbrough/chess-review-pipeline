@@ -1,5 +1,6 @@
 """Runs Stockfish over each game and records what happened from the player's side."""
 import math
+import statistics
 import threading
 import time
 
@@ -10,6 +11,7 @@ MATE_CP = 1000
 PIECE_VALUE = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
 SUPPORTED = {"standard", "fromPosition", "chess960"}
 MIN_PLIES = 4
+VERSION = 2
 
 
 def win_percent(cp):
@@ -19,7 +21,32 @@ def win_percent(cp):
 
 def move_accuracy(win_before, win_after):
     drop = max(0.0, win_before - win_after)
-    return max(0.0, min(100.0, 103.1668 * math.exp(-0.04354 * drop) - 3.1669))
+    return max(0.0, min(100.0, 103.1668100711649 * math.exp(-0.04354415386753951 * drop) - 3.166924740191411 + 1))
+
+
+def game_accuracy(evals, white_moves_first, is_white):
+    """Lichess-style game accuracy: volatility-weighted mean averaged with the harmonic mean."""
+    wins = [win_percent(cp) for cp in evals]
+    moves = len(wins) - 1
+    if moves < 2:
+        return None
+    window = max(2, min(8, moves // 10))
+    windows = [wins[:window]] * (min(window, len(wins)) - 2)
+    windows += [wins[i:i + window] for i in range(len(wins) - window + 1)]
+    pairs = []
+    for index in range(moves):
+        white_to_move = (index % 2 == 0) == white_moves_first
+        if white_to_move != is_white:
+            continue
+        before, after = wins[index], wins[index + 1]
+        if not is_white:
+            before, after = 100 - before, 100 - after
+        pairs.append((move_accuracy(before, after), max(0.5, min(12.0, statistics.pstdev(windows[index])))))
+    if not pairs:
+        return None
+    weighted = sum(a * w for a, w in pairs) / sum(w for _, w in pairs)
+    harmonic = len(pairs) / sum(1 / max(a, 1.0) for a, _ in pairs)
+    return round((weighted + harmonic) / 2, 1)
 
 
 def classify(win_before, win_after):
@@ -60,6 +87,34 @@ def hangs_piece(board_after, reply):
     return not defended or PIECE_VALUE[attacker.piece_type] > PIECE_VALUE[target.piece_type]
 
 
+def is_investment(board, move):
+    """True when the move leaves a piece where something cheaper can take it."""
+    piece = board.piece_at(move.from_square)
+    captured = board.piece_at(move.to_square)
+    gained = PIECE_VALUE[captured.piece_type] if captured else 0
+    after = board.copy(stack=False)
+    after.push(move)
+    attackers = [after.piece_at(s) for s in after.attackers(after.turn, move.to_square)]
+    return bool(attackers) and piece.piece_type != chess.PAWN and (
+        min(PIECE_VALUE[a.piece_type] or 99 for a in attackers) < PIECE_VALUE[piece.piece_type] - gained
+    )
+
+
+def refresh_accuracy(store):
+    """Recalculates accuracy from stored evaluations for games analysed earlier."""
+    changed = 0
+    for game in list(store.games.values()):
+        analysis = game.get("analysis") or {}
+        if "evals" not in analysis or "acc_v" in analysis or analysis.get("version") == VERSION:
+            continue
+        start = chess.Board(game.get("fen") or chess.STARTING_FEN, chess960=game.get("variant") == "chess960")
+        analysis["acc"] = game_accuracy(analysis["evals"], start.turn == chess.WHITE, game["color"] == "white")
+        analysis["acc_v"] = 2
+        store.update(game["id"], analysis=analysis)
+        changed += 1
+    return changed
+
+
 def analyse_game(game, engine, nodes, engine_name):
     """Returns the analysis dict for a stored game, or a dict with `skipped`."""
     if game.get("variant", "standard") not in SUPPORTED:
@@ -81,7 +136,7 @@ def analyse_game(game, engine, nodes, engine_name):
         return {"skipped": f"unreadable moves: {error}"}
 
     session = object()
-    evals, bests, mates = [], [], []
+    evals, bests, mates, lines = [], [], [], []
     for position in positions:
         outcome = position.outcome()
         if outcome is not None:
@@ -91,11 +146,13 @@ def analyse_game(game, engine, nodes, engine_name):
                 evals.append(MATE_CP if outcome.winner == chess.WHITE else -MATE_CP)
             bests.append(None)
             mates.append(None)
+            lines.append([])
             continue
         info = engine.analyse(position, chess.engine.Limit(nodes=nodes), game=session)
         evals.append(score_cp(info["score"]))
         pv = info.get("pv") or [None]
         bests.append(pv[0])
+        lines.append(pv[:6] if pv[0] else [])
         mates.append(info["score"].pov(position.turn).mate())
 
     my_turn = chess.WHITE if game["color"] == "white" else chess.BLACK
@@ -103,24 +160,40 @@ def analyse_game(game, engine, nodes, engine_name):
     clocks = game.get("clocks") or []
     initial = game.get("init") or 0
     low_clock = max(10, initial * 0.1)
-    accuracy, losses = [], []
+    losses = []
+    opponent_moments, highlights, key_positions = [], [], set()
     counts = {"inaccuracy": 0, "mistake": 0, "blunder": 0}
     moments = []
     phases = {"opening": 0, "middlegame": 0, "endgame": 0}
 
     for index, move in enumerate(played):
         before_board = positions[index]
-        if before_board.turn != my_turn:
-            continue
         before, after = evals[index] * sign, evals[index + 1] * sign
         win_before, win_after = win_percent(before), win_percent(after)
-        accuracy.append(move_accuracy(win_before, win_after))
+        if before_board.turn != my_turn:
+            # The opponent's error shows up as a gain from the player's side.
+            category = None if move == bests[index] else classify(100 - win_before, 100 - win_after)
+            if category in ("mistake", "blunder"):
+                reply_found = index + 1 < len(played) and played[index + 1] == bests[index + 1]
+                opponent_moments.append({
+                    "ply": index + 1, "san": sans[index],
+                    "best": before_board.san(bests[index]) if bests[index] else None,
+                    "cat": category, "before": before, "after": after, "punished": reply_found,
+                })
+                key_positions.update((index, index + 1))
+                if reply_found:
+                    highlights.append({"ply": index + 2, "san": sans[index + 1], "why": "best reply to the error"})
+            continue
+        if move == bests[index] and is_investment(before_board, move) and win_after >= win_before - 2:
+            highlights.append({"ply": index + 1, "san": sans[index], "why": "best move, puts a piece en prise"})
+            key_positions.add(index)
         losses.append(max(0, before - after))
         category = None if move == bests[index] else classify(win_before, win_after)
         if category is None:
             continue
         counts[category] += 1
         ply = index + 1
+        key_positions.update((index, index + 1))
         phase = phase_of(before_board, ply)
         tags = []
         my_mate = mates[index]
@@ -153,10 +226,19 @@ def analyse_game(game, engine, nodes, engine_name):
             "clock": clock,
         })
 
+    engine_lines = {}
+    for index in sorted(key_positions):
+        if lines[index]:
+            engine_lines[str(index)] = positions[index].variation_san(lines[index])
+    white_first = chess.Board(start, chess960=chess960).turn == chess.WHITE
     return {
+        "version": VERSION,
         "engine": engine_name,
         "nodes": nodes,
-        "acc": round(sum(accuracy) / len(accuracy), 1) if accuracy else None,
+        "acc": game_accuracy(evals, white_first, game["color"] == "white"),
+        "opponent_moments": opponent_moments,
+        "highlights": highlights,
+        "lines": engine_lines,
         "acpl": round(sum(losses) / len(losses)) if losses else None,
         "counts": counts,
         "phases": phases,
@@ -165,9 +247,9 @@ def analyse_game(game, engine, nodes, engine_name):
     }
 
 
-def analyse_pending(store, engine_path, nodes, workers, deadline):
+def analyse_pending(store, engine_path, nodes, workers, deadline, games=None):
     """Analyses unanalysed games, newest first, until done or out of time."""
-    pending = iter([g for g in store.newest_first() if "analysis" not in g])
+    pending = iter(games if games is not None else [g for g in store.newest_first() if "analysis" not in g])
     lock = threading.Lock()
     done = [0]
     errors = []
