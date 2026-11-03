@@ -2,6 +2,8 @@
 
 Tracks every Lichess game played by [PinkRoses](https://lichess.org/@/PinkRoses), checks each one with Stockfish, and publishes a written review of it, along with rating trends and recurring mistakes, as a GitHub Pages site.
 
+**Live site:** https://kennethkimbrough.github.io/pinkroses-lichess/
+
 ## How it works
 
 Every two hours a GitHub Action:
