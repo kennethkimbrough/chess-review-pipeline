@@ -4,7 +4,7 @@ import chess
 import pytest
 
 from tracker.__main__ import should_continue
-from tracker import analyze, build, chesscom, lichess, motifs, review
+from tracker import analyze, book, build, champions, chesscom, lichess, motifs, review
 from tracker.store import Store
 
 RAW = {
@@ -376,6 +376,30 @@ def test_plain_recapture_is_not_a_great_move():
 
     analyze.find_great_moves(game, analysis, Engine(None, 0), 10)
     assert calls == [1, 3]
+
+
+LONG_GAME = "e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d3 d6 O-O O-O Re1 a6 a4 h6 h3 Be6 Bxe6 fxe6 Be3 Bxe3 Rxe3 Qe8".split()
+
+
+def test_book_stops_at_the_first_position_outside_the_list():
+    assert book.book_plies({"moves": "e4 e5 Nf3 Nc6 Bb5 Qh4"}) == 5
+    assert book.book_plies({"moves": "e4 e5", "fen": "x"}) == 0
+
+
+def test_style_features_are_from_the_players_side():
+    white = champions.extract(LONG_GAME, chess.WHITE)
+    black = champions.extract(LONG_GAME, chess.BLACK)
+    assert white["open_e4"] == 1 and black["reply_e5"] == 1 and black["open_e4"] == 0
+    assert set(white) == set(champions.FEATURES)
+    assert champions.extract(LONG_GAME[:10], chess.WHITE) is None
+
+
+def test_matcher_returns_three_shares_and_only_real_champions():
+    match = champions.Matcher().match({"moves": " ".join(LONG_GAME), "color": "white", "variant": "standard"})
+    names = [n for n, _ in match["top"]]
+    assert len(names) == 3 and all(n in champions.Matcher().profiles for n in names)
+    assert match["top"][0][1] >= match["top"][1][1]
+    assert champions.Matcher().match({"moves": "e4 e5", "color": "white"}) is None
 
 
 def test_old_style_reviews_are_replaced(tmp_path):

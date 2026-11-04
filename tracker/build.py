@@ -3,7 +3,7 @@ import json
 import shutil
 from collections import Counter, defaultdict
 
-from . import motifs
+from . import book, motifs
 from .store import month_of
 
 TAGS = ["hung_piece", "missed_material", "allowed_mate", "missed_mate", "low_clock"]
@@ -61,6 +61,7 @@ def build(store, config, out):
         analysis = game.get("analysis") or {}
         counts = analysis.get("counts") or {}
         game["sacrifices"] = motifs.sacrifices(game)
+        game["book_plies"] = book.book_plies(game)
         rows.append([
             game["id"], game["at"], game["speed"], int(game["rated"]), game["color"][0],
             game.get("rating"), game.get("diff"), game["opp"], game.get("opp_rating"),
@@ -75,7 +76,7 @@ def build(store, config, out):
         for game in members:
             analysis = game.get("analysis") or {}
             details[game["id"]] = {
-                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"), "sacrifices": game["sacrifices"], "great": analysis.get("great", []), "opponent_moments": analysis.get("opponent_moments"),
+                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"), "sacrifices": game["sacrifices"], "great": analysis.get("great", []), "opponent_moments": analysis.get("opponent_moments"), "book_plies": game["book_plies"], "style": game.get("style"),
                 "opening": game.get("opening"), "eco": game.get("eco"), "variant": game.get("variant"),
                 "evals": analysis.get("evals"), "moments": analysis.get("moments"),
                 "acpl": analysis.get("acpl"), "counts": analysis.get("counts"),
@@ -98,5 +99,6 @@ def build(store, config, out):
         "recent_size": len(recent),
         "openings": opening_rows([g for g in games if g["result"] and not g.get("bot")]),
         "chesscom_username": config.get("chesscom_username"),
+        "style_counts": Counter(g["style"]["top"][0][0] for g in games if g.get("style") and not g.get("bot")).most_common(),
     }
     (out / "summary.json").write_text(json.dumps(summary, separators=(",", ":"), ensure_ascii=False))
