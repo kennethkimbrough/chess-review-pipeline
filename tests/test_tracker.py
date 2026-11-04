@@ -434,6 +434,16 @@ def test_numbered_long_castling_is_not_read_as_short_castling():
     assert not review.PIECE_MOVE.findall("6.O-O-O")
 
 
+def test_batch_stops_at_its_spending_point_but_new_games_continue(tmp_path):
+    store = make_store(tmp_path, 3)
+    for name in ("g0", "g1"):
+        store.games[name]["speed"] = "blitz"
+    config = {**CONFIG, "review_latest": 1, "review_recent_batch": {"speed": "blitz", "count": 2, "stop_at_usd": 1.0}}
+    assert {g["id"] for g in review.in_scope(store, config)} == {"g2", "g1", "g0"}
+    store.state["cost_usd"] = 1.0
+    assert {g["id"] for g in review.in_scope(store, config)} == {"g2"}
+
+
 def test_old_style_reviews_are_replaced(tmp_path):
     store = make_store(tmp_path, 1)
     store.games["g0"]["review"] = {"summary": "old"}

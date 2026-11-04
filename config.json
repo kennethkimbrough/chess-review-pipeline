@@ -33,6 +33,7 @@
   "chesscom_humans": [],
   "review_recent_batch": {
     "speed": "blitz",
-    "count": 2400
+    "count": 2400,
+    "stop_at_usd": 12.25
   }
 }

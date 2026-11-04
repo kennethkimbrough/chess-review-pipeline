@@ -343,6 +343,8 @@ def in_scope(store, config):
     speeds = set(config.get("review_all_speeds", []))
     extra_start = float("inf")
     extra = config.get("review_recent_batch")
+    if extra and store.state["cost_usd"] >= extra.get("stop_at_usd", float("inf")):
+        extra = None
     if extra:
         key = f"batch_from_at_{extra['speed']}_{extra['count']}"
         if key not in store.state:
