@@ -415,6 +415,17 @@ def test_recent_batch_takes_the_newest_unreviewed_games_of_that_speed(tmp_path):
     assert {g["id"] for g in review.in_scope(store, config)} == {"g5", "g3", "g2"}
 
 
+def test_held_games_are_skipped_and_imports_apply_once(tmp_path):
+    store = make_store(tmp_path, 2)
+    (tmp_path / "review_holds.txt").write_text("g1\n")
+    assert {g["id"] for g in review.in_scope(store, {**CONFIG, "review_latest": 2})} == {"g0"}
+    review_data = {"headline": "x", "v": review.REVIEW_VERSION}
+    (tmp_path / "imported_reviews.jsonl").write_text(json.dumps({"id": "g1", "review": review_data}) + "\n")
+    assert review.import_reviews(store) == 1
+    assert store.games["g1"]["review"]["headline"] == "x"
+    assert review.import_reviews(store) == 0
+
+
 def test_old_style_reviews_are_replaced(tmp_path):
     store = make_store(tmp_path, 1)
     store.games["g0"]["review"] = {"summary": "old"}

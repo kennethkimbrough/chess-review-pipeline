@@ -63,6 +63,9 @@ def main():
     refreshed = analyze.refresh_accuracy(store)
     if refreshed:
         print(f"Refreshed accuracy for {refreshed} games")
+    imported = review.import_reviews(store)
+    if imported:
+        print(f"Imported {imported} reviews")
     matched = champions.assign(store)
     if matched:
         print(f"Matched champion styles for {matched} games")
