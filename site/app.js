@@ -166,6 +166,21 @@ function reviewHTML(detail, showMoments, gameId) {
   return `<div class="review"><p>${esc(r.summary)}</p><h3>Turning point</h3><p>${esc(r.turning_point)}</p>${notes}<div class="focus"><h3>Work on this</h3><p>${esc(r.focus)}</p></div></div>`;
 }
 
+function playerBar(row, mine) {
+  const score = row[C.result] === "draw" ? "½" : (row[C.result] === "win") === mine ? "1" : "0";
+  const name = mine ? (row[C.site] === "chesscom" ? data.chesscom_username : data.username) : row[C.opp];
+  const rating = mine ? row[C.rating] : row[C.oppRating];
+  const diff = mine && row[C.diff] ? `<span class="${row[C.diff] > 0 ? "gain" : "lost"}">${row[C.diff] > 0 ? "+" : ""}${row[C.diff]}</span>` : "";
+  return `<div class="player"><span class="score${score === "1" ? " won" : ""}">${score}</span><span class="name">${esc(name)}</span><span class="rating">${rating ?? ""}</span>${diff}</div>`;
+}
+
+const ICONS = {
+  first: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h3v16H5zM20 4v16L9 12z"/></svg>',
+  prev: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 4v16L6 12z"/></svg>',
+  next: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v16l12-8z"/></svg>',
+  last: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4h3v16h-3zM4 4v16l11-8z"/></svg>',
+};
+
 function headline(row) {
   const rating = row[C.oppRating] ? ` (${row[C.oppRating]})` : "";
   return `<h1><span class="verdict ${row[C.result]}">${resultWord[row[C.result]]}</span> against ${esc(row[C.opp])}${rating}</h1>`;
@@ -310,10 +325,10 @@ async function latestReview() {
     let ply = (detail.moments || []).reduce((best, m) => (!best || m.before - m.after > best.before - best.after ? m : best), null);
     ply = ply ? ply.ply : (line ? line.frames.length - 1 : 0);
     const board = line ? boardHTML(line.frames[ply], row[C.color] === "b", line.marks[ply], `Board after ${moveLabel(ply)}`, annotations(detail)[ply]) : "";
-    return `<div class="game-head"><div>${board}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
+    return `<div class="game-head"><div>${playerBar(row, false)}${board}${playerBar(row, true)}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
       <div>${headline(row)}<p class="meta">${metaLine(row)}</p>${reviewHTML(detail, false, row[C.id])}<p><a href="#/game/${row[C.id]}">Replay this game</a></p></div></div>`;
   }
-  return `<h1 style="font-size:clamp(2rem,5vw,3.2rem);margin-top:12px">Your reviews will appear here</h1><p class="hint">${data.total.toLocaleString()} games collected and ${data.analysed.toLocaleString()} analysed so far. Reviews are written as analysis finishes.</p>`;
+  return `<h1 style="font-size:clamp(1.5rem,3vw,2rem);margin-top:12px">Your reviews will appear here</h1><p class="hint">${data.total.toLocaleString()} games collected and ${data.analysed.toLocaleString()} analysed so far. Reviews are written as analysis finishes.</p>`;
 }
 
 async function home() {
@@ -354,7 +369,7 @@ function sortGames(list) {
 }
 function gamesView() {
   setNav("games");
-  app.innerHTML = `<h1 style="font-size:clamp(2rem,5vw,3.2rem);margin-top:12px">Games</h1>
+  app.innerHTML = `<h1 style="font-size:clamp(1.5rem,3vw,2rem);margin-top:12px">Games</h1>
   <p class="hint" id="count"></p>
   <div class="filters">
     <input id="q" type="search" placeholder="Search opponent or opening" aria-label="Search opponent or opening" value="${esc(listState.q)}">
@@ -451,8 +466,8 @@ async function gameView(id, startPly) {
   const reviewed = new Set(((detail.review && detail.review.moments) || []).map((m) => m.ply));
   const others = moments.filter((m) => !reviewed.has(m.ply) && m.cat !== "inaccuracy");
   app.innerHTML = `<div class="game-head"><div>
-      <div id="board"></div>
-      <div class="controls"><button id="first" aria-label="First position">⏮</button><button id="prev" aria-label="Previous move">◀</button><button id="next" aria-label="Next move">▶</button><button id="last" aria-label="Last position">⏭</button><span class="position" id="pos" aria-live="polite"></span></div>
+      ${playerBar(row, false)}<div id="board"></div>${playerBar(row, true)}
+      <div class="controls"><button id="first" aria-label="First position">${ICONS.first}</button><button id="prev" aria-label="Previous move">${ICONS.prev}</button><button id="next" aria-label="Next move">${ICONS.next}</button><button id="last" aria-label="Last position">${ICONS.last}</button><span class="position" id="pos" aria-live="polite"></span></div>
       ${evalGraph(detail, row, ply)}
       ${moveTable(detail, sans)}
     </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true)}
