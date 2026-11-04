@@ -167,16 +167,39 @@ function boardRow(boardMarkup, cp, flip) {
 
 const engine = {
   worker: null, enabled: false, searching: false, pending: null, fen: null, lines: {}, listener: null,
+  files: ["vendor/stockfish/stockfish-19-lite-single.js", "vendor/stockfish/stockfish-19-asm.js"],
+  attempt: 0, ready: false, timer: null, failed: false,
   start() {
-    if (this.worker) return;
-    this.worker = new Worker("vendor/stockfish/stockfish-19-lite-single.js");
+    if (this.worker || this.failed) return;
+    this.ready = false;
+    this.worker = new Worker(this.files[this.attempt]);
     this.worker.onmessage = (event) => this.onLine(String(event.data));
-    this.worker.onerror = () => { if (this.listener) this.listener(null, "The engine couldn't start in this browser."); };
+    this.worker.onerror = (event) => this.fail(event.message);
+    this.worker.onmessageerror = () => this.fail("message error");
     this.worker.postMessage("uci");
-    this.worker.postMessage("setoption name MultiPV value 2");
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => { if (!this.ready) this.fail("no response"); }, this.attempt ? 30000 : 8000);
+  },
+  fail(reason) {
+    clearTimeout(this.timer);
+    if (this.worker) this.worker.terminate();
+    this.worker = null;
+    this.searching = false;
+    const fen = this.pending || this.fen;
+    this.pending = null;
+    this.fen = null;
+    this.lines = {};
+    this.attempt += 1;
+    if (this.attempt < this.files.length) {
+      if (fen) this.analyse(fen);
+      return;
+    }
+    this.failed = true;
+    if (this.listener) this.listener(null, `The engine couldn't start in this browser (${reason || "unknown error"}).`);
   },
   analyse(fen) {
     this.start();
+    if (!this.worker) return;
     if (this.fen === fen && (this.searching || Object.keys(this.lines).length)) return;
     this.lines = {};
     this.fen = fen;
@@ -187,7 +210,7 @@ const engine = {
     this.searching = true;
     this.pending = null;
     this.worker.postMessage(`position fen ${fen}`);
-    this.worker.postMessage("go depth 20 movetime 4000");
+    this.worker.postMessage(`go depth 20 movetime ${this.attempt ? 8000 : 4000}`);
   },
   stop() {
     this.fen = null;
@@ -196,6 +219,12 @@ const engine = {
     if (this.worker && this.searching) this.worker.postMessage("stop");
   },
   onLine(line) {
+    if (line.startsWith("uciok") && !this.ready) {
+      this.ready = true;
+      clearTimeout(this.timer);
+      this.worker.postMessage("setoption name MultiPV value 2");
+      return;
+    }
     if (line.startsWith("bestmove")) {
       this.searching = false;
       if (this.pending) this.run(this.pending);
@@ -249,6 +278,19 @@ function arrowsSVG(lines, flip) {
     return `<g class="arrow arrow-${k}"><line x1="${x1}" y1="${y1}" x2="${ex}" y2="${ey}"/><polygon points="${x2},${y2} ${ex + Math.cos(a) * w},${ey + Math.sin(a) * w} ${ex - Math.cos(a) * w},${ey - Math.sin(a) * w}"/></g>`;
   }).join("");
   return `<svg class="arrows" viewBox="0 0 800 800" aria-hidden="true">${parts}</svg>`;
+}
+
+function betterMove(detail, notes, frames, ply) {
+  if (!["blunder", "mistake", "miss"].includes(notes[ply])) return null;
+  const moment = (detail.moments || []).find((m) => m.ply === ply);
+  if (!moment || !moment.best) return null;
+  const move = new Chess(frames[ply - 1]).move(moment.best, { sloppy: true });
+  return move ? { san: move.san, uci: move.from + move.to } : null;
+}
+
+function betterArrow(better, flip) {
+  if (!better) return "";
+  return arrowsSVG({ 1: { pv: [better.uci] } }, flip).replace("arrow arrow-1", "arrow arrow-better");
 }
 
 const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
@@ -524,7 +566,7 @@ async function latestReview() {
     let ply = (detail.moments || []).reduce((best, m) => (!best || m.before - m.after > best.before - best.after ? m : best), null);
     ply = ply ? ply.ply : (line ? line.frames.length - 1 : 0);
     const board = line ? boardHTML(line.frames[ply], row[C.color] === "b", line.marks[ply], `Board after ${moveLabel(ply)}`, annotations(detail, row)[ply]) : "";
-    return `<div class="game-head"><div>${playerBar(row, false)}${boardRow(board, detail.evals ? detail.evals[ply] : null, row[C.color] === "b")}${playerBar(row, true)}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
+    return `<div class="game-head"><div>${playerBar(row, false)}${boardRow(board + (line ? betterArrow(betterMove(detail, annotations(detail, row), line.frames, ply), row[C.color] === "b") : ""), detail.evals ? detail.evals[ply] : null, row[C.color] === "b")}${playerBar(row, true)}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
       <div>${headline(row)}<p class="meta">${metaLine(row)}</p>${reviewHTML(detail, false, row[C.id], row)}<p><a href="#/game/${row[C.id]}">Replay this game</a></p></div></div>`;
   }
   return `<h1 style="font-size:clamp(1.5rem,3vw,2rem);margin-top:12px">Your reviews will appear here</h1><p class="hint">${data.total.toLocaleString()} games collected and ${data.analysed.toLocaleString()} analysed so far. Reviews are written as analysis finishes.</p>`;
@@ -700,7 +742,9 @@ async function gameView(id, startPly) {
     const mark = variation ? variation.marks[variation.index] : line.marks[ply];
     const note = variation ? null : notes[ply];
     const label = variation ? "Board in your line" : ply ? `Board after ${moveLabel(ply)} ${sans[ply - 1]}` : "Starting position";
+    const better = variation ? null : betterMove(detail, notes, line.frames, ply);
     boardHost.innerHTML = boardHTML(fen, flip, mark, label, note)
+      + betterArrow(better, flip)
       + (engine.enabled && engine.fen === fen ? arrowsSVG(engine.lines, flip) : "");
     if (selected) {
       const from = boardHost.querySelector(`[data-sq="${selected}"]`);
@@ -723,7 +767,7 @@ async function gameView(id, startPly) {
     if (!engine.enabled || !fen) { box.innerHTML = ""; return; }
     const lines = ["1", "2"].filter((k) => engine.fen === fen && engine.lines[k]).map((k) => engine.lines[k]);
     box.innerHTML = lines.length
-      ? lines.map((l) => `<p class="engine-line"><b>${engineScore(l)}</b> ${esc(lineToSan(fen, l.pv))}</p>`).join("") + `<p class="note">Depth ${lines[0].depth}, Stockfish 19 Lite in your browser.</p>`
+      ? lines.map((l) => `<p class="engine-line"><b>${engineScore(l)}</b> ${esc(lineToSan(fen, l.pv))}</p>`).join("") + `<p class="note">Depth ${lines[0].depth}, Stockfish 19 ${engine.attempt ? "(compatibility version, slower)" : "Lite"} in your browser.</p>`
       : new Chess(fen).game_over() ? '<p class="note">The game is over in this position.</p>' : '<p class="note">Thinking…</p>';
   };
   const paintVariation = () => {
@@ -751,6 +795,8 @@ async function gameView(id, startPly) {
     pos.textContent = variation
       ? (variation.index ? `Your line: ${variation.sans[variation.index - 1]}` : "Your line: start")
       : ply ? `${moveLabel(ply)} ${sans[ply - 1]}` : "Start";
+    const better = !variation && line ? betterMove(detail, notes, line.frames, ply) : null;
+    if (better) pos.textContent += `, better: ${better.san}`;
     document.querySelectorAll("#moves button").forEach((b) => {
       const current = !variation && +b.dataset.ply === ply;
       b.classList.toggle("on", current);
