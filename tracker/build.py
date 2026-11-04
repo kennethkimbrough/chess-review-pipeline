@@ -3,6 +3,7 @@ import json
 import shutil
 from collections import Counter, defaultdict
 
+from . import motifs
 from .store import month_of
 
 TAGS = ["hung_piece", "missed_material", "allowed_mate", "missed_mate", "low_clock"]
@@ -59,12 +60,14 @@ def build(store, config, out):
     for game in games:
         analysis = game.get("analysis") or {}
         counts = analysis.get("counts") or {}
+        game["sacrifices"] = motifs.sacrifices(game)
         rows.append([
             game["id"], game["at"], game["speed"], int(game["rated"]), game["color"][0],
             game.get("rating"), game.get("diff"), game["opp"], game.get("opp_rating"),
             game["result"], family(game.get("opening")), analysis.get("acc"),
             counts.get("blunder"), counts.get("mistake"), int("review" in game),
-            game.get("site", "lichess"), int(bool(game.get("bot"))),
+            game.get("site", "lichess"), int(bool(game.get("bot"))), len(game["sacrifices"]),
+            len(game.get("moves", "").split()),
         ])
         months[month_of(game["at"])].append(game)
     for month, members in months.items():
@@ -72,7 +75,7 @@ def build(store, config, out):
         for game in members:
             analysis = game.get("analysis") or {}
             details[game["id"]] = {
-                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"),
+                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"), "sacrifices": game["sacrifices"],
                 "opening": game.get("opening"), "eco": game.get("eco"), "variant": game.get("variant"),
                 "evals": analysis.get("evals"), "moments": analysis.get("moments"),
                 "acpl": analysis.get("acpl"), "counts": analysis.get("counts"),

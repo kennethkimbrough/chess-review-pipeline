@@ -318,6 +318,24 @@ def test_lichess_resume_ignores_chesscom_games(tmp_path):
     assert store.newest_at("lichess") == RAW["createdAt"]
 
 
+def test_sacrifice_needs_a_real_legal_loss():
+    bxh7 = chess.Board("r1bq1rk1/ppp2ppp/2n1pn2/3p4/1b1P4/2NBPN2/PPP2PPP/R1BQ1RK1 w - - 0 8")
+    assert motifs.is_sacrifice(bxh7, bxh7.parse_san("Bxh7+"))
+    trade = chess.Board("4k3/8/8/3q4/8/8/3Q4/4K3 w - - 0 1")
+    assert not motifs.is_sacrifice(trade, trade.parse_san("Qxd5"))
+    mate = chess.Board("6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1")
+    assert not motifs.is_sacrifice(mate, mate.parse_san("Re8#"))
+    safe = chess.Board("4k3/8/8/8/8/8/8/N3K3 w - - 0 1")
+    assert not motifs.is_sacrifice(safe, safe.parse_san("Nb3"))
+
+
+def test_old_analyses_are_queued_but_skipped_games_are_not():
+    assert analyze.needs_engine({})
+    assert analyze.needs_engine({"analysis": {"evals": []}})
+    assert not analyze.needs_engine({"analysis": {"skipped": "variant"}})
+    assert not analyze.needs_engine({"analysis": {"version": analyze.VERSION}})
+
+
 def test_old_style_reviews_are_replaced(tmp_path):
     store = make_store(tmp_path, 1)
     store.games["g0"]["review"] = {"summary": "old"}
