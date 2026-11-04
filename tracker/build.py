@@ -4,7 +4,7 @@ import shutil
 import time
 from collections import Counter, defaultdict
 
-from . import book, champions, motifs
+from . import book, champions, insights, motifs
 from .store import month_of
 
 TAGS = ["hung_piece", "missed_material", "allowed_mate", "missed_mate", "low_clock"]
@@ -76,7 +76,7 @@ def build(store, config, out):
             game["result"], family(game.get("opening")), analysis.get("acc"),
             counts.get("blunder"), counts.get("mistake"), int("review" in game),
             game.get("site", "lichess"), int(bool(game.get("bot"))), len(game["sacrifices"]),
-            len(game.get("moves", "").split()), len(analysis.get("great", [])),
+            len(game.get("moves", "").split()), len(analysis.get("great", [])), int(insights.comeback(game)),
         ])
         months[month_of(game["at"])].append(game)
     for month, members in months.items():
@@ -84,7 +84,7 @@ def build(store, config, out):
         for game in members:
             analysis = game.get("analysis") or {}
             details[game["id"]] = {
-                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"), "sacrifices": game["sacrifices"], "great": analysis.get("great", []), "opponent_moments": analysis.get("opponent_moments"), "book_plies": game["book_plies"], "style": {k: v for k, v in game["style"].items() if k != "x"} if game.get("style") else None,
+                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"), "sacrifices": game["sacrifices"], "great": analysis.get("great", []), "opponent_moments": analysis.get("opponent_moments"), "book_plies": game["book_plies"], "clocks": game.get("clocks"), "style": {k: v for k, v in game["style"].items() if k != "x"} if game.get("style") else None,
                 "opening": game.get("opening"), "eco": game.get("eco"), "variant": game.get("variant"),
                 "evals": analysis.get("evals"), "moments": analysis.get("moments"),
                 "acpl": analysis.get("acpl"), "counts": analysis.get("counts"),
@@ -107,8 +107,12 @@ def build(store, config, out):
         "recent_size": len(recent),
         "openings": opening_rows([g for g in games if g["result"] and not g.get("bot")]),
         "chesscom_username": config.get("chesscom_username"),
+        "progress": insights.progress(games),
+        "clock_stats": insights.clock_stats(games),
         "updated_at": int(time.time() * 1000),
         "style_overall": champions.Matcher().overall_match([g for g in games if not g.get("bot")]),
         "style_counts": Counter(g["style"]["top"][0][0] for g in games if g.get("style") and not g.get("bot")).most_common(),
     }
+    for name, value in (("puzzles", insights.puzzles(games)), ("openings", insights.opening_tree(games))):
+        (out / f"{name}.json").write_text(json.dumps(value, separators=(",", ":"), ensure_ascii=False))
     (out / "summary.json").write_text(json.dumps(summary, separators=(",", ":"), ensure_ascii=False))
