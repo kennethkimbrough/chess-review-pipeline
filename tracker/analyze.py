@@ -250,7 +250,40 @@ def analyse_game(game, engine, nodes, engine_name):
 def needs_engine(game):
     """Unanalysed, or analysed before the fuller format, unless it was deliberately skipped."""
     analysis = game.get("analysis")
-    return analysis is None or ("skipped" not in analysis and analysis.get("version") != VERSION)
+    if analysis is None:
+        return True
+    return "skipped" not in analysis and (analysis.get("version") != VERSION or analysis.get("great_v") != GREAT_VERSION)
+
+
+GREAT_VERSION = 1
+
+
+def find_great_moves(game, analysis, engine, nodes):
+    """Plies where the player found the top move and the second-best move was already losing."""
+    color = chess.WHITE if game["color"] == "white" else chess.BLACK
+    sign = 1 if color == chess.WHITE else -1
+    evals = analysis["evals"]
+    errors = {m["ply"] for m in analysis["moments"]}
+    board = chess.Board(game.get("fen") or chess.STARTING_FEN, chess960=game.get("variant") == "chess960")
+    found, previous = [], None
+    session = object()
+    for index, san in enumerate(game["moves"].split()):
+        move = board.parse_san(san)
+        ply = index + 1
+        if board.turn == color and ply not in errors and evals[index + 1] * sign >= -100 \
+                and board.legal_moves.count() > 1:
+            recapture = previous is not None and previous[1] and move.to_square == previous[0]
+            if not recapture:
+                infos = engine.analyse(board, chess.engine.Limit(nodes=nodes), multipv=2, game=session)
+                if len(infos) == 2 and infos[0].get("pv") and infos[0]["pv"][0] == move:
+                    top = infos[0]["score"].pov(color).score(mate_score=MATE_CP * 10)
+                    second = infos[1]["score"].pov(color).score(mate_score=MATE_CP * 10)
+                    top, second = max(-MATE_CP, min(MATE_CP, top)), max(-MATE_CP, min(MATE_CP, second))
+                    if top >= -100 and second <= -150 and win_percent(top) - win_percent(second) >= 20:
+                        found.append(ply)
+        previous = (move.to_square, board.is_capture(move))
+        board.push(move)
+    return found
 
 
 def analyse_pending(store, engine_path, nodes, workers, deadline, games=None):
@@ -270,7 +303,11 @@ def analyse_pending(store, engine_path, nodes, workers, deadline, games=None):
                     game = next(pending, None)
                 if game is None:
                     return
-                analysis = analyse_game(game, engine, nodes, name)
+                analysis = game.get("analysis")
+                if not analysis or analysis.get("version") != VERSION:
+                    analysis = analyse_game(game, engine, nodes, name)
+                if "skipped" not in analysis:
+                    analysis = {**analysis, "great": find_great_moves(game, analysis, engine, nodes), "great_v": GREAT_VERSION}
                 store.update(game["id"], analysis=analysis)
                 with lock:
                     done[0] += 1

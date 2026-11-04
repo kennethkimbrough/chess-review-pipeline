@@ -109,7 +109,7 @@ def test_hangs_piece_detects_a_free_capture_only():
 def analysed_game():
     game = game_record(moves="e4 e5 Nf3 d5 exd5 Qxd5", clocks=None)
     game["analysis"] = {
-        "version": analyze.VERSION, "acc": 70.0, "counts": {"inaccuracy": 0, "mistake": 0, "blunder": 1},
+        "version": analyze.VERSION, "great_v": analyze.GREAT_VERSION, "great": [], "acc": 70.0, "counts": {"inaccuracy": 0, "mistake": 0, "blunder": 1},
         "phases": {"opening": 1, "middlegame": 0, "endgame": 0}, "evals": [0, 0, 0, -500, 0, 0, 0],
         "moments": [{"ply": 3, "san": "Nf3", "best": "Nc3", "cat": "blunder", "before": 20, "after": -500,
                      "phase": "opening", "tags": ["hung_piece"], "clock": None}],
@@ -333,7 +333,49 @@ def test_old_analyses_are_queued_but_skipped_games_are_not():
     assert analyze.needs_engine({})
     assert analyze.needs_engine({"analysis": {"evals": []}})
     assert not analyze.needs_engine({"analysis": {"skipped": "variant"}})
-    assert not analyze.needs_engine({"analysis": {"version": analyze.VERSION}})
+    assert analyze.needs_engine({"analysis": {"version": analyze.VERSION}})
+    assert not analyze.needs_engine({"analysis": {"version": analyze.VERSION, "great_v": analyze.GREAT_VERSION}})
+
+
+class MultiEngine:
+    def __init__(self, top, second):
+        self.top, self.second = top, second
+
+    def analyse(self, board, limit, multipv=None, game=None):
+        move = next(iter(board.legal_moves))
+        first = self.top if self.top is not None else move
+        other = [m for m in board.legal_moves if m != first][0]
+        pov = lambda cp: chess.engine.PovScore(chess.engine.Cp(cp), board.turn)
+        return [{"pv": [first], "score": pov(100)}, {"pv": [other], "score": pov(self.second)}]
+
+
+def great_game():
+    game = game_record(moves="e4 e5 Nf3 Nc6", clocks=None)
+    analysis = {"evals": [0, 0, 0, 0, 0], "moments": []}
+    return game, analysis
+
+
+def test_great_move_needs_top_choice_and_a_losing_alternative():
+    game, analysis = great_game()
+    e4 = chess.Move.from_uci("e2e4")
+    assert analyze.find_great_moves(game, analysis, MultiEngine(e4, -300), 10) == [1]
+    assert analyze.find_great_moves(game, analysis, MultiEngine(e4, 50), 10) == []
+    assert analyze.find_great_moves(game, analysis, MultiEngine(chess.Move.from_uci("d2d4"), -300), 10) == []
+
+
+def test_plain_recapture_is_not_a_great_move():
+    game = game_record(moves="e4 d5 exd5", color="black", clocks=None)
+    game["moves"] = "e4 d5 exd5 Qxd5 Nc3 Qa5"
+    analysis = {"evals": [0] * 7, "moments": []}
+    calls = []
+
+    class Engine(MultiEngine):
+        def analyse(self, board, limit, multipv=None, game=None):
+            calls.append(board.fullmove_number)
+            return super().analyse(board, limit, multipv, game)
+
+    analyze.find_great_moves(game, analysis, Engine(None, 0), 10)
+    assert calls == [1, 3]
 
 
 def test_old_style_reviews_are_replaced(tmp_path):

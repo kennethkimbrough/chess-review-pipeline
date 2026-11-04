@@ -67,7 +67,7 @@ def build(store, config, out):
             game["result"], family(game.get("opening")), analysis.get("acc"),
             counts.get("blunder"), counts.get("mistake"), int("review" in game),
             game.get("site", "lichess"), int(bool(game.get("bot"))), len(game["sacrifices"]),
-            len(game.get("moves", "").split()),
+            len(game.get("moves", "").split()), len(analysis.get("great", [])),
         ])
         months[month_of(game["at"])].append(game)
     for month, members in months.items():
@@ -75,7 +75,7 @@ def build(store, config, out):
         for game in members:
             analysis = game.get("analysis") or {}
             details[game["id"]] = {
-                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"), "sacrifices": game["sacrifices"],
+                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"), "sacrifices": game["sacrifices"], "great": analysis.get("great", []),
                 "opening": game.get("opening"), "eco": game.get("eco"), "variant": game.get("variant"),
                 "evals": analysis.get("evals"), "moments": analysis.get("moments"),
                 "acpl": analysis.get("acpl"), "counts": analysis.get("counts"),
