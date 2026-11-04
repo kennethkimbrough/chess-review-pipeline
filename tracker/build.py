@@ -75,7 +75,7 @@ def build(store, config, out):
         for game in members:
             analysis = game.get("analysis") or {}
             details[game["id"]] = {
-                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"), "sacrifices": game["sacrifices"], "great": analysis.get("great", []),
+                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"), "sacrifices": game["sacrifices"], "great": analysis.get("great", []), "opponent_moments": analysis.get("opponent_moments"),
                 "opening": game.get("opening"), "eco": game.get("eco"), "variant": game.get("variant"),
                 "evals": analysis.get("evals"), "moments": analysis.get("moments"),
                 "acpl": analysis.get("acpl"), "counts": analysis.get("counts"),
