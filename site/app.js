@@ -1,5 +1,5 @@
 "use strict";
-const C = { id: 0, at: 1, speed: 2, rated: 3, color: 4, rating: 5, diff: 6, opp: 7, oppRating: 8, result: 9, family: 10, acc: 11, blunders: 12, mistakes: 13, reviewed: 14, site: 15, bot: 16, sacrifices: 17, plies: 18 };
+const C = { id: 0, at: 1, speed: 2, rated: 3, color: 4, rating: 5, diff: 6, opp: 7, oppRating: 8, result: 9, family: 10, acc: 11, blunders: 12, mistakes: 13, reviewed: 14, site: 15, bot: 16, sacrifices: 17, plies: 18, great: 19 };
 const SITE_NAMES = { lichess: "Lichess", chesscom: "Chess.com" };
 const SPEEDS = ["bullet", "blitz", "rapid", "classical"];
 const SERIES = { bullet: "--s1", blitz: "--s2", rapid: "--s3", classical: "--s4" };
@@ -320,7 +320,7 @@ async function home() {
 }
 
 const listState = { site: "", speed: "", result: "", q: "", sort: "newest", shown: 50 };
-const SORTS = { newest: "Newest first", oldest: "Oldest first", best: "Highest accuracy", worst: "Lowest accuracy", opponentHigh: "Highest-rated opponent", opponentLow: "Lowest-rated opponent", sacrifices: "Most sacrifices" };
+const SORTS = { newest: "Newest first", oldest: "Oldest first", best: "Highest accuracy", worst: "Lowest accuracy", opponentHigh: "Highest-rated opponent", opponentLow: "Lowest-rated opponent", sacrifices: "Most sacrifices", great: "Most great moves" };
 function sortGames(list) {
   // Very short games can score 100%, so they rank after full games.
   const acc = (r, missing) => (r[C.acc] == null || r[C.plies] < 20 ? missing : r[C.acc]);
@@ -333,6 +333,7 @@ function sortGames(list) {
     opponentHigh: (a, b) => (b[C.oppRating] ?? -1) - (a[C.oppRating] ?? -1) || byDate(a, b),
     opponentLow: (a, b) => (a[C.oppRating] ?? 1e6) - (b[C.oppRating] ?? 1e6) || byDate(a, b),
     sacrifices: (a, b) => b[C.sacrifices] - a[C.sacrifices] || byDate(a, b),
+    great: (a, b) => b[C.great] - a[C.great] || byDate(a, b),
   };
   return list.sort(orders[listState.sort]);
 }
@@ -363,7 +364,7 @@ function gamesView() {
     document.getElementById("rows").innerHTML = list.slice(0, listState.shown).map((r) => {
       const errs = r[C.blunders] == null ? "" : `, ${r[C.blunders]} ${r[C.blunders] === 1 ? "blunder" : "blunders"}`;
       const acc = r[C.acc] == null ? "" : `${Math.round(r[C.acc])}%`;
-      return `<li><a href="#/game/${r[C.id]}"><span class="res ${r[C.result]}">${resultWord[r[C.result]]}</span><span class="opp">${esc(r[C.opp])}${r[C.oppRating] ? ` (${r[C.oppRating]})` : ""}</span><span class="acc">${acc}</span><span class="dt">${new Date(r[C.at]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })}</span><span class="sub">${SITE_NAMES[r[C.site]]}, ${cap(r[C.speed])}${r[C.bot] ? ", bot" : ""}, ${esc(r[C.family])}${errs}${r[C.sacrifices] ? `, ${plural(r[C.sacrifices], "sacrifice")}` : ""}${r[C.reviewed] ? ", reviewed" : ""}</span></a></li>`;
+      return `<li><a href="#/game/${r[C.id]}"><span class="res ${r[C.result]}">${resultWord[r[C.result]]}</span><span class="opp">${esc(r[C.opp])}${r[C.oppRating] ? ` (${r[C.oppRating]})` : ""}</span><span class="acc">${acc}</span><span class="dt">${new Date(r[C.at]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })}</span><span class="sub">${SITE_NAMES[r[C.site]]}, ${cap(r[C.speed])}${r[C.bot] ? ", bot" : ""}, ${esc(r[C.family])}${errs}${r[C.sacrifices] ? `, ${plural(r[C.sacrifices], "sacrifice")}` : ""}${r[C.great] ? `, ${plural(r[C.great], "great move")}` : ""}${r[C.reviewed] ? ", reviewed" : ""}</span></a></li>`;
     }).join("") || '<li class="note">No games match. Clear a filter to see more.</li>';
     document.getElementById("more").hidden = list.length <= listState.shown;
   };
@@ -389,10 +390,13 @@ function moveTable(detail, sans, moments) {
   const blackFirst = parts[1] === "b";
   const first = +parts[5] || 1;
   const marks = {};
+  const good = new Set();
   for (const m of moments) if (m.cat !== "inaccuracy") marks[m.ply] = m.cat === "blunder" ? "??" : "?";
+  for (const p of detail.great || []) { marks[p] = "!"; good.add(p); }
+  for (const p of detail.sacrifices || []) { marks[p] = "!!"; good.add(p); }
   const cell = (ply) => {
     if (ply < 1 || ply > sans.length) return "<td></td>";
-    const mark = marks[ply] ? `<span class="mark">${marks[ply]}</span>` : "";
+    const mark = marks[ply] ? `<span class="mark${good.has(ply) ? " good" : ""}">${marks[ply]}</span>` : "";
     return `<td><button data-ply="${ply}">${figurine(sans[ply - 1])}${mark}</button></td>`;
   };
   const rows = [];
@@ -442,7 +446,8 @@ async function gameView(id, startPly) {
       ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
       <p><a href="${esc(siteUrl)}" rel="noopener">Open on ${SITE_NAMES[row[C.site]]}</a></p></div></div>
     ${others.length ? `<section><h2>${reviewed.size ? "Other mistakes and blunders" : "Mistakes and blunders"}</h2><ul class="moments">${others.map((m) => `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(m.san)} <span class="tag-${m.cat}">${m.cat}</span></b><span class="why">${pawns(m.before)} to ${pawns(m.after)}${m.best ? `, ${esc(m.best)} was better` : ""}${m.tags.length ? `, ${m.tags.map((t) => TAG_SHORT[t]).join(", ")}` : ""}</span></button></li>`).join("")}</ul></section>` : ""}
-    ${(detail.sacrifices || []).length ? `<section><h2>Sacrifices</h2><ul class="moments">${detail.sacrifices.map((p) => `<li><button data-ply="${p}"><b>${moveLabel(p)} ${esc(sans[p - 1])}</b><span class="why">The engine's top move, leaving a piece where it can be taken.</span></button></li>`).join("")}</ul></section>` : ""}`;
+    ${(detail.great || []).length ? `<section><h2>Great moves</h2><ul class="moments">${detail.great.map((p) => `<li><button data-ply="${p}"><b>${moveLabel(p)} ${esc(sans[p - 1])}!</b><span class="why">The only move here that didn't lose.</span></button></li>`).join("")}</ul></section>` : ""}
+    ${(detail.sacrifices || []).length ? `<section><h2>Sacrifices</h2><ul class="moments">${detail.sacrifices.map((p) => `<li><button data-ply="${p}"><b>${moveLabel(p)} ${esc(sans[p - 1])}!!</b><span class="why">The engine's top move, leaving a piece where it can be taken.</span></button></li>`).join("")}</ul></section>` : ""}`;
   const boardHost = document.getElementById("board");
   const pos = document.getElementById("pos");
   const evalNow = document.getElementById("evalnow");

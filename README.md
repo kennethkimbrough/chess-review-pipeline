@@ -15,6 +15,8 @@ Every two hours a GitHub Action:
 
 While work remains, each productive run queues the next one, so backlogs don't depend on the schedule. A run with no new games changes nothing and costs nothing. Older games are analysed newest first across runs and count toward the stats. If the repo has been quiet for 50 days, a small commit keeps the schedule from being disabled.
 
+In the move table, `!!` marks a sacrifice and `!` marks a great move: the engine's top move, when the second-best move is already losing. Forced moves and plain recaptures don't count.
+
 A sacrifice here is the engine's top move that leaves a knight or bigger piece where something cheaper can legally take it at a net loss, without losing ground. It isn't the same as Lichess or Chess.com move labels.
 
 Accuracy follows the Lichess method, but on separate engine analysis, so it can differ slightly from the figure Lichess shows.
