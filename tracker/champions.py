@@ -5,7 +5,7 @@ from pathlib import Path
 
 import chess
 
-VERSION = 1
+VERSION = 2
 MIN_PLIES = 24
 MAX_PLIES = 80
 PROFILE_PATH = Path(__file__).with_name("champions.json")
@@ -170,7 +170,19 @@ class Matcher:
         ranked = rank(features, self.data)
         top = ranked[0][0]
         return {"top": [[name, round(share, 3)] for name, share in ranked[:3]],
-                "why": reasons(features, self.profiles[top], self.overall)}
+                "why": reasons(features, self.profiles[top], self.overall),
+                "x": [round(features[name], 3) for name in FEATURES]}
+
+    def overall_match(self, games):
+        """Compares the average of many games with the champions, rather than counting per-game winners."""
+        rows = [g["style"]["x"] for g in games if (g.get("style") or {}).get("x")]
+        if not rows:
+            return None
+        features = {name: sum(row[i] for row in rows) / len(rows) for i, name in enumerate(FEATURES)}
+        ranked = rank(features, self.data)
+        top = ranked[0][0]
+        return {"top": [[name, round(share, 3)] for name, share in ranked[:3]],
+                "why": reasons(features, self.profiles[top], self.overall), "games": len(rows)}
 
 
 def assign(store):
