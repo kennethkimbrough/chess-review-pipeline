@@ -75,15 +75,73 @@ function boardHTML(fen, flip, mark, label) {
   return `<div class="board" role="img" aria-label="${esc(label)}">${cells.join("")}</div>`;
 }
 
-function reviewHTML(detail, showMoments) {
+const SAN_TOKEN = "(?:O-O(?:-O)?|[KQRBN][a-h1-8]?x?[a-h][1-8]|[a-h]x[a-h][1-8](?:=[QRBN])?|[a-h][1-8](?:=[QRBN])?)[+#]?[!?]*";
+const bareMove = (san) => san.replace(/[+#!?]/g, "");
+
+function moveRef(text, ply, gameId) {
+  if (gameId) return `<a class="moveref" href="#/game/${gameId}/${ply}">${esc(text)}</a>`;
+  return `<button class="moveref" data-ply="${ply}" aria-label="Go to ${esc(text)}">${esc(text)}</button>`;
+}
+
+// A move that was played links to itself. An engine alternative links to the position it was available in.
+function plyForMove(number, dots, san, sans) {
+  const ply = (number - 1) * 2 + (dots === "." ? 1 : 2);
+  if (ply < 1 || ply > sans.length) return null;
+  return sans[ply - 1] && bareMove(sans[ply - 1]) === bareMove(san) ? ply : ply - 1;
+}
+
+function linkMoves(text, detail, gameId) {
+  const sans = (detail.moves || "").split(" ").filter(Boolean);
+  if (detail.fen || !sans.length) return esc(text);
+  const pattern = new RegExp(`(?<![\\w.])(\\d+)(\\.{1,3})\\s?(${SAN_TOKEN})|\\b([Mm]ove )(\\d+)\\b`, "g");
+  let html = "", last = 0;
+  for (const match of text.matchAll(pattern)) {
+    let ply = null, shown = match[0], prefix = "";
+    if (match[3]) ply = plyForMove(+match[1], match[2], match[3], sans);
+    else {
+      prefix = match[4];
+      shown = match[0].slice(prefix.length);
+      const candidate = (+match[5] - 1) * 2 + 1;
+      ply = candidate <= sans.length ? candidate : null;
+      if (ply !== null) shown = match[0];
+      prefix = "";
+    }
+    html += esc(text.slice(last, match.index)) + prefix + (ply === null ? esc(shown) : moveRef(shown, ply, gameId));
+    last = match.index + match[0].length;
+  }
+  return html + esc(text.slice(last));
+}
+
+function linkLine(line, detail, gameId) {
+  const sans = (detail.moves || "").split(" ").filter(Boolean);
+  if (detail.fen || !sans.length) return esc(line);
+  let next = null;
+  return line.split(/\s+/).map((token) => {
+    const numbered = token.match(new RegExp(`^(\\d+)(\\.{1,3})(${SAN_TOKEN})$`));
+    if (numbered) {
+      const ply = plyForMove(+numbered[1], numbered[2], numbered[3], sans);
+      next = ply === null ? null : ply + 1;
+      return ply === null ? esc(token) : moveRef(token, ply, gameId);
+    }
+    if (next && sans[next - 1] && bareMove(sans[next - 1]) === bareMove(token)) {
+      const ply = next;
+      next += 1;
+      return moveRef(token, ply, gameId);
+    }
+    next = null;
+    return esc(token);
+  }).join(" ");
+}
+
+function reviewHTML(detail, showMoments, gameId) {
   const r = detail.review;
   if (!r) return "";
   if (r.sections) {
     const parts = r.sections.map((sec) => {
-      const line = sec.line ? `<p class="line">${lineHTML(sec.line, detail, showMoments)}</p>` : "";
-      return `<p>${esc(sec.text)}</p>${line}`;
+      const line = sec.line ? `<p class="line">${linkLine(sec.line, detail, gameId)}</p>` : "";
+      return `<p>${linkMoves(sec.text, detail, gameId)}</p>${line}`;
     }).join("");
-    return `<div class="review"><p class="headline">${esc(r.headline)}</p>${parts}<h3>Turning point</h3><p>${esc(r.turning_point)}</p><div class="focus"><h3>Work on this</h3><p>${esc(r.focus)}</p></div></div>`;
+    return `<div class="review"><p class="headline">${esc(r.headline)}</p>${parts}<h3>Turning point</h3><p>${linkMoves(r.turning_point, detail, gameId)}</p><div class="focus"><h3>Work on this</h3><p>${linkMoves(r.focus, detail, gameId)}</p></div></div>`;
   }
   const notes = showMoments && r.moments && r.moments.length
     ? `<h3>Moments to look at</h3><ul class="moments">${r.moments.map((m) => {
@@ -91,18 +149,6 @@ function reviewHTML(detail, showMoments) {
         return `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(found ? found.san : "")}</b><span class="why">${esc(m.note)}</span></button></li>`;
       }).join("")}</ul>` : "";
   return `<div class="review"><p>${esc(r.summary)}</p><h3>Turning point</h3><p>${esc(r.turning_point)}</p>${notes}<div class="focus"><h3>Work on this</h3><p>${esc(r.focus)}</p></div></div>`;
-}
-
-function lineHTML(line, detail, clickable) {
-  const first = line.match(/(\d+)(\.{1,3})\s?([^\s]+)/);
-  const sans = (detail.moves || "").split(" ");
-  if (clickable && first) {
-    const ply = (+first[1] - 1) * 2 + (first[2] === "." ? 1 : 2);
-    if (!detail.fen && sans[ply - 1] && sans[ply - 1].replace(/[+#]/g, "") === first[3].replace(/[+#!?]/g, "")) {
-      return `<button class="linkline" data-ply="${ply}">${esc(line)}</button>`;
-    }
-  }
-  return `<b>${esc(line)}</b>`;
 }
 
 function headline(row) {
@@ -250,7 +296,7 @@ async function latestReview() {
     ply = ply ? ply.ply : (line ? line.frames.length - 1 : 0);
     const board = line ? boardHTML(line.frames[ply], row[C.color] === "b", line.marks[ply], `Board after ${moveLabel(ply)}`) : "";
     return `<div class="game-head"><div>${board}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
-      <div>${headline(row)}<p class="meta">${metaLine(row)}</p>${reviewHTML(detail, false)}<p><a href="#/game/${row[C.id]}">Replay this game</a></p></div></div>`;
+      <div>${headline(row)}<p class="meta">${metaLine(row)}</p>${reviewHTML(detail, false, row[C.id])}<p><a href="#/game/${row[C.id]}">Replay this game</a></p></div></div>`;
   }
   return `<h1 style="font-size:clamp(2rem,5vw,3.2rem);margin-top:12px">Your reviews will appear here</h1><p class="hint">${data.total.toLocaleString()} games collected and ${data.analysed.toLocaleString()} analysed so far. Reviews are written as analysis finishes.</p>`;
 }
@@ -341,7 +387,7 @@ function evalGraph(detail, row, ply) {
   return `<svg class="eval" id="eval" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Evaluation through the game from your side. Above the line favours you."><path class="area" d="${area}"/><line class="mid" x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" vector-effect="non-scaling-stroke"/><line class="now" id="evalnow" x1="${x(ply)}" x2="${x(ply)}" y1="0" y2="${H}" vector-effect="non-scaling-stroke"/></svg>`;
 }
 
-async function gameView(id) {
+async function gameView(id, startPly) {
   setNav("games");
   const row = data.games.find((r) => r[C.id] === id);
   if (!row) { app.innerHTML = '<h1>Game not found</h1><p><a href="#/games">Back to all games</a></p>'; return; }
@@ -349,7 +395,7 @@ async function gameView(id) {
   const line = replay(detail);
   const sans = (detail.moves || "").split(" ").filter(Boolean);
   const moments = detail.moments || [];
-  let ply = line ? line.frames.length - 1 : 0;
+  let ply = line ? (startPly == null ? line.frames.length - 1 : Math.min(startPly, line.frames.length - 1)) : 0;
   const flip = row[C.color] === "b";
   const siteUrl = detail.url || `https://lichess.org/${row[C.id]}`;
   const counts = detail.counts;
@@ -414,7 +460,10 @@ async function route() {
   tip.hidden = true;
   const hash = location.hash.replace(/^#\/?/, "");
   try {
-    if (hash.startsWith("game/")) await gameView(hash.slice(5));
+    if (hash.startsWith("game/")) {
+      const [id, startPly] = hash.slice(5).split("/");
+      await gameView(id, startPly === undefined || !/^\d+$/.test(startPly) ? null : +startPly);
+    }
     else if (hash === "games") gamesView();
     else await home();
   } catch (error) {
