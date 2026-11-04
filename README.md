@@ -15,13 +15,13 @@ Every two hours a GitHub Action:
 
 While work remains, each productive run queues the next one, so backlogs don't depend on the schedule. A run with no new games changes nothing and costs nothing. Variants, games under 4 half-moves and games whose reviews keep failing are kept in `data/` but left off the site. Older games are analysed newest first across runs and count toward the stats. If the repo has been quiet for 50 days, a small commit keeps the schedule from being disabled.
 
-In the move table, `!!` marks a sacrifice and `!` marks a great move: the engine's top move, when the second-best move is already losing. Forced moves and plain recaptures don't count.
+In the move table, `!!` marks a brilliant move and `!` marks a great move: the engine's top move, when the second-best move is already losing. Forced moves and plain recaptures don't count.
 
 Other labels come from the drop in win chance: Best (under 1%), Excellent (under 2.5%), Good (under 5%), plus Book for positions in the [Lichess opening list](https://github.com/lichess-org/chess-openings) (CC0) and Miss for failing to punish an error or missing a forced mate without ending up lost. They resemble Chess.com's labels but won't always match them.
 
 "Played most like" scores each game's move patterns, such as captures, pawn play, castling and pressure on the king, against 16 of the 18 undisputed champions, using a linear model trained on up to 1,200 games each from PGN Mentor files in the [Chess-Dataset collection](https://github.com/mainali123/Chess-Dataset). In a held-out test it picked the right champion 17% of the time on average, against 6% by chance, so treat it as a fun comparison. Fast online games also lean toward the sharper, older champions, partly because of how they're played. Ding Liren and Gukesh Dommaraju aren't in that data. `tools/build_champion_profiles.py` rebuilds the model and needs numpy.
 
-A sacrifice here is the engine's top move that leaves a knight or bigger piece where something cheaper can legally take it at a net loss, without losing ground. It isn't the same as Lichess or Chess.com move labels.
+A brilliant move here is a sacrifice: the engine's top move that leaves a knight or bigger piece where something cheaper can legally take it at a net loss, without losing ground. It isn't the same as Lichess or Chess.com move labels.
 
 Accuracy follows the Lichess method, but on separate engine analysis, so it can differ slightly from the figure Lichess shows.
 
