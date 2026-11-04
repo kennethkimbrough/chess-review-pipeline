@@ -60,8 +60,11 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             git commit -q -m "Update games $(date -u +%F)"
-            git pull -q --rebase origin main
-            git push -q origin HEAD:main
+            for attempt in 1 2 3 4 5; do
+              git pull -q --rebase origin main && git push -q origin HEAD:main && break
+              if [ "$attempt" = 5 ]; then exit 1; fi
+              sleep $(( attempt * 30 ))
+            done
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Queue another run while work remains
