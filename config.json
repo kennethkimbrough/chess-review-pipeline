@@ -3,7 +3,7 @@
   "goal_rating": 1500,
   "engine_nodes": 100000,
   "model": "google/gemini-3.7-flash",
-  "max_cost_usd": 14.25,
+  "max_cost_usd": 44.0,
   "review_workers": 4,
   "review_max_tokens": 3000,
   "price_per_million": {
@@ -25,15 +25,11 @@
     "classical"
   ],
   "monthly_limit_overrides": {
-    "2026-11": 14.25
+    "2026-11": 44.0
   },
   "chesscom_username": "Qqisking",
   "chesscom_reviews_enabled": true,
   "chesscom_bots": [],
   "chesscom_humans": [],
-  "review_recent_batch": {
-    "speed": "blitz",
-    "count": 2400,
-    "stop_at_usd": 10.25
-  }
+  "full_history_stop_at_usd": 40.25
 }

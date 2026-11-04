@@ -434,26 +434,31 @@ def test_numbered_long_castling_is_not_read_as_short_castling():
     assert not review.PIECE_MOVE.findall("6.O-O-O")
 
 
-def test_batch_stops_at_its_spending_point_but_new_games_continue(tmp_path):
+def test_full_history_stops_at_its_spending_point_but_new_games_continue(tmp_path):
     store = make_store(tmp_path, 3)
-    for name in ("g0", "g1"):
-        store.games[name]["speed"] = "blitz"
-    config = {**CONFIG, "review_latest": 1, "review_recent_batch": {"speed": "blitz", "count": 2, "stop_at_usd": 1.0}}
+    config = {**CONFIG, "review_latest": 1, "full_history_stop_at_usd": 1.0}
     assert {g["id"] for g in review.in_scope(store, config)} == {"g2", "g1", "g0"}
     store.state["cost_usd"] = 1.0
     assert {g["id"] for g in review.in_scope(store, config)} == {"g2"}
 
 
-def test_batch_stops_during_a_run_when_its_spending_point_passes(tmp_path):
+def test_full_history_stops_during_a_run_when_its_spending_point_passes(tmp_path):
     store = make_store(tmp_path, 4)
-    for name in ("g0", "g1", "g2"):
-        store.games[name]["speed"] = "blitz"
-    config = {**CONFIG, "review_latest": 1, "max_cost_usd": 9.0, "monthly_limit_usd": 9.0,
-              "review_recent_batch": {"speed": "blitz", "count": 3, "stop_at_usd": 1.0}}
+    config = {**CONFIG, "review_latest": 1, "max_cost_usd": 9.0, "monthly_limit_usd": 9.0, "full_history_stop_at_usd": 1.0}
     review.in_scope(store, config)
     done = review.review_pending(store, config, "k", far(), FakeSession([ok(0.6), ok(0.6), ok(0.6), ok(0.6)]))
     assert done == 2
     assert "review" not in store.games["g1"] and "review" not in store.games["g0"]
+
+
+def test_unreviewable_games_are_left_off_the_site(tmp_path):
+    store = make_store(tmp_path / "data", 4)
+    store.games["g0"]["variant"] = "crazyhouse"
+    store.games["g1"]["moves"] = "e4 e5"
+    store.games["g2"]["review_failures"] = 6
+    build.build(store, {"username": "PinkRoses", "goal_rating": 1500}, tmp_path / "site")
+    summary = json.loads((tmp_path / "site" / "summary.json").read_text())
+    assert [row[0] for row in summary["games"]] == ["g3"] and summary["total"] == 1
 
 
 def test_old_style_reviews_are_replaced(tmp_path):

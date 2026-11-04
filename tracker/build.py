@@ -15,6 +15,13 @@ def family(name):
     return name.split(":")[0].strip() if name else "Unknown"
 
 
+def can_be_shown(game):
+    """Variants, games too short to analyse and repeated review failures stay in the data but off the site."""
+    return (game.get("variant", "standard") in ("standard", "fromPosition", "chess960")
+            and len(game.get("moves", "").split()) >= 4
+            and (game.get("review") or game.get("review_failures", 0) < 6))
+
+
 def is_analysed(game):
     return bool(game.get("analysis")) and "skipped" not in game["analysis"]
 
@@ -56,7 +63,7 @@ def build(store, config, out):
     if out.exists():
         shutil.rmtree(out)
     (out / "months").mkdir(parents=True)
-    games = sorted(store.games.values(), key=lambda g: g["at"])
+    games = sorted((g for g in store.games.values() if can_be_shown(g)), key=lambda g: g["at"])
     rows, months = [], defaultdict(list)
     for game in games:
         analysis = game.get("analysis") or {}

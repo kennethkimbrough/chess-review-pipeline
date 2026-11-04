@@ -354,17 +354,19 @@ def in_scope(store, config):
                 store.state_changed = True
         extra_start = store.state.get(key, float("inf"))
         extra_speed = extra["speed"]
+    if store.state["cost_usd"] < config.get("full_history_stop_at_usd", 0):
+        return games
     return [g for g in games if g["at"] >= start or g["speed"] in speeds or g.get("site") == "chesscom"
             or (extra and g["speed"] == extra_speed and g.get("site", "lichess") == "lichess" and g["at"] >= extra_start)]
 
 
 def in_current_scope(store, config, game):
-    batch = config.get("review_recent_batch") or {}
-    is_batch_only = (
-        game["speed"] == batch.get("speed") and game["at"] < store.state.get("review_from_at", 0)
-        and game["speed"] not in config.get("review_all_speeds", []) and game.get("site", "lichess") == "lichess"
-    )
-    return not (is_batch_only and store.state["cost_usd"] >= batch.get("stop_at_usd", float("inf")))
+    """Older games only count while spending is under their stopping point, checked before every review."""
+    if game["at"] >= store.state.get("review_from_at", 0) or game.get("site", "lichess") != "lichess":
+        return True
+    if game["speed"] in config.get("review_all_speeds", []):
+        return True
+    return store.state["cost_usd"] < config.get("full_history_stop_at_usd", 0)
 
 
 def needs_review(game):
