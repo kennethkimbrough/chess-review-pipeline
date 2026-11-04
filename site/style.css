@@ -3,6 +3,7 @@
   --bg: #fdf8fa; --panel: #f7e9ee; --ink: #2c141f; --soft: #6e4f5c; --line: #e6cdd6;
   --rose: #a62c5b; --sq-light: #f6dfe6; --sq-dark: #c0708f; --sq-hi: #efb04f; --sq-hi-d: #d9902f;
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --m-blunder: #c62828; --m-mistake: #c75a00; --m-inaccuracy: #8a6d00; --m-great: #0b6fb8; --m-brilliant: #00796b;
   --win: #16784f; --loss: #b3261e; --draw: #6e4f5c;
 }
 @media (prefers-color-scheme: dark) {
@@ -11,6 +12,7 @@
     --bg: #1c0f15; --panel: #2c1820; --ink: #f8e9ee; --soft: #c9a9b5; --line: #4a2b37;
     --rose: #f08bb0; --sq-light: #e6c3cf; --sq-dark: #9c5272;
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --m-blunder: #ff7b72; --m-mistake: #ffa657; --m-inaccuracy: #e3c34f; --m-great: #6cb6ff; --m-brilliant: #4dd0b8;
     --win: #62cfa0; --loss: #f4877f; --draw: #c9a9b5;
   }
 }
@@ -75,11 +77,16 @@ input { min-width: 0; }
 .movetable td { padding: 0; border: 0; }
 .movetable button { display: block; width: 100%; min-height: 40px; padding: 6px 10px; background: none; border: 0; border-radius: 4px; text-align: left; font-variant-numeric: tabular-nums; }
 .movetable button:hover { background: var(--panel); }
-.movetable button.on { background: var(--rose); color: var(--bg); font-weight: 700; }
+.movetable button.on, .movetable button.on[class*=tone-] { background: var(--rose); color: var(--bg); font-weight: 700; }
 .fig { font-family: "Noto Sans Symbols2", "Segoe UI Symbol", "Apple Symbols", "DejaVu Sans", sans-serif; font-size: 1.12em; margin-right: 1px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.mark { margin-left: 2px; color: var(--loss); font-weight: 700; }
-.mark.good { color: var(--win); }
+.mark { margin-left: 2px; font-weight: 700; }
+.movetable .tone-blunder { color: var(--m-blunder); font-weight: 700; } .movetable .tone-mistake { color: var(--m-mistake); font-weight: 700; }
+.movetable .tone-inaccuracy { color: var(--m-inaccuracy); font-weight: 700; } .movetable .tone-great { color: var(--m-great); font-weight: 700; }
+.movetable .tone-brilliant { color: var(--m-brilliant); font-weight: 700; }
+.badge { position: absolute; top: 2%; right: 2%; width: 42cqw; height: 42cqw; min-width: 16px; min-height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font: 700 max(10px, 23cqw)/1 "Atkinson Hyperlegible", sans-serif; box-shadow: 0 0 0 1.5px #fff, 0 1px 3px rgba(0,0,0,.45); z-index: 1; }
+.cat-blunder { background: #c62828; } .cat-mistake { background: #c75a00; } .cat-inaccuracy { background: #8a6d00; }
+.cat-great { background: #0b6fb8; } .cat-brilliant { background: #00796b; }
 .movetable button.on .mark { color: inherit; }
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }

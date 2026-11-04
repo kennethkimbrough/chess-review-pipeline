@@ -53,8 +53,19 @@ function replay(detail) {
   return { frames, marks };
 }
 
+const MARK_CATEGORY = { "??": "blunder", "?": "mistake", "?!": "inaccuracy", "!": "great", "!!": "brilliant" };
+const MARK_NAME = { blunder: "Blunder", mistake: "Mistake", inaccuracy: "Inaccuracy", great: "Great move", brilliant: "Sacrifice" };
+function annotations(detail) {
+  const marks = {};
+  for (const m of detail.moments || []) marks[m.ply] = { blunder: "??", mistake: "?", inaccuracy: "?!" }[m.cat];
+  for (const m of detail.opponent_moments || []) marks[m.ply] = { blunder: "??", mistake: "?" }[m.cat];
+  for (const p of detail.great || []) marks[p] = "!";
+  for (const p of detail.sacrifices || []) marks[p] = "!!";
+  return marks;
+}
+
 const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
-function boardHTML(fen, flip, mark, label) {
+function boardHTML(fen, flip, mark, label, note) {
   const rows = fen.split(" ")[0].split("/");
   const cells = [];
   rows.forEach((row, rank) => {
@@ -68,7 +79,11 @@ function boardHTML(fen, flip, mark, label) {
     const name = "abcdefgh"[file] + (8 - rank);
     const shade = (file + rank) % 2 ? "d" : "l";
     const hi = mark && mark.includes(name) ? " hi" : "";
-    const inner = piece ? `<span class="pc ${piece === piece.toUpperCase() ? "w" : "b"}">${GLYPH[piece.toLowerCase()]}︎</span>` : "";
+    let inner = piece ? `<span class="pc ${piece === piece.toUpperCase() ? "w" : "b"}">${GLYPH[piece.toLowerCase()]}︎</span>` : "";
+    if (note && mark && mark[1] === name) {
+      const category = MARK_CATEGORY[note];
+      inner += `<span class="badge cat-${category}" title="${MARK_NAME[category]}" aria-label="${MARK_NAME[category]}">${note}</span>`;
+    }
     return `<div class="sq ${shade}${hi}">${inner}</div>`;
   }
   if (flip) cells.reverse();
@@ -294,7 +309,7 @@ async function latestReview() {
     const line = replay(detail);
     let ply = (detail.moments || []).reduce((best, m) => (!best || m.before - m.after > best.before - best.after ? m : best), null);
     ply = ply ? ply.ply : (line ? line.frames.length - 1 : 0);
-    const board = line ? boardHTML(line.frames[ply], row[C.color] === "b", line.marks[ply], `Board after ${moveLabel(ply)}`) : "";
+    const board = line ? boardHTML(line.frames[ply], row[C.color] === "b", line.marks[ply], `Board after ${moveLabel(ply)}`, annotations(detail)[ply]) : "";
     return `<div class="game-head"><div>${board}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
       <div>${headline(row)}<p class="meta">${metaLine(row)}</p>${reviewHTML(detail, false, row[C.id])}<p><a href="#/game/${row[C.id]}">Replay this game</a></p></div></div>`;
   }
@@ -384,20 +399,18 @@ function figurine(san) {
     .replace(/=([QRBN])/, (_, p) => `=<span class="fig" aria-hidden="true">${FIGURINES[p]}\uFE0E</span><span class="sr">${p}</span>`);
 }
 
-function moveTable(detail, sans, moments) {
+function moveTable(detail, sans) {
   if (!sans.length) return "";
   const parts = (detail.fen || "").split(" ");
   const blackFirst = parts[1] === "b";
   const first = +parts[5] || 1;
-  const marks = {};
-  const good = new Set();
-  for (const m of moments) if (m.cat !== "inaccuracy") marks[m.ply] = m.cat === "blunder" ? "??" : "?";
-  for (const p of detail.great || []) { marks[p] = "!"; good.add(p); }
-  for (const p of detail.sacrifices || []) { marks[p] = "!!"; good.add(p); }
+  const marks = annotations(detail);
   const cell = (ply) => {
     if (ply < 1 || ply > sans.length) return "<td></td>";
-    const mark = marks[ply] ? `<span class="mark${good.has(ply) ? " good" : ""}">${marks[ply]}</span>` : "";
-    return `<td><button data-ply="${ply}">${figurine(sans[ply - 1])}${mark}</button></td>`;
+    const note = marks[ply];
+    const category = note ? MARK_CATEGORY[note] : "";
+    const mark = note ? `<span class="mark" title="${MARK_NAME[category]}">${note}</span>` : "";
+    return `<td><button data-ply="${ply}"${note ? ` class="tone-${category}"` : ""}>${figurine(sans[ply - 1])}${mark}</button></td>`;
   };
   const rows = [];
   const offset = blackFirst ? 1 : 0;
@@ -441,20 +454,21 @@ async function gameView(id, startPly) {
       <div id="board"></div>
       <div class="controls"><button id="first" aria-label="First position">⏮</button><button id="prev" aria-label="Previous move">◀</button><button id="next" aria-label="Next move">▶</button><button id="last" aria-label="Last position">⏭</button><span class="position" id="pos" aria-live="polite"></span></div>
       ${evalGraph(detail, row, ply)}
-      ${moveTable(detail, sans, moments)}
+      ${moveTable(detail, sans)}
     </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true)}
       ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
       <p><a href="${esc(siteUrl)}" rel="noopener">Open on ${SITE_NAMES[row[C.site]]}</a></p></div></div>
     ${others.length ? `<section><h2>${reviewed.size ? "Other mistakes and blunders" : "Mistakes and blunders"}</h2><ul class="moments">${others.map((m) => `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(m.san)} <span class="tag-${m.cat}">${m.cat}</span></b><span class="why">${pawns(m.before)} to ${pawns(m.after)}${m.best ? `, ${esc(m.best)} was better` : ""}${m.tags.length ? `, ${m.tags.map((t) => TAG_SHORT[t]).join(", ")}` : ""}</span></button></li>`).join("")}</ul></section>` : ""}
     ${(detail.great || []).length ? `<section><h2>Great moves</h2><ul class="moments">${detail.great.map((p) => `<li><button data-ply="${p}"><b>${moveLabel(p)} ${esc(sans[p - 1])}!</b><span class="why">The only move here that didn't lose.</span></button></li>`).join("")}</ul></section>` : ""}
     ${(detail.sacrifices || []).length ? `<section><h2>Sacrifices</h2><ul class="moments">${detail.sacrifices.map((p) => `<li><button data-ply="${p}"><b>${moveLabel(p)} ${esc(sans[p - 1])}!!</b><span class="why">The engine's top move, leaving a piece where it can be taken.</span></button></li>`).join("")}</ul></section>` : ""}`;
+  const notes = annotations(detail);
   const boardHost = document.getElementById("board");
   const pos = document.getElementById("pos");
   const evalNow = document.getElementById("evalnow");
   const go = (next) => {
     if (!line) return;
     ply = Math.max(0, Math.min(line.frames.length - 1, next));
-    boardHost.innerHTML = boardHTML(line.frames[ply], flip, line.marks[ply], ply ? `Board after ${moveLabel(ply)} ${sans[ply - 1]}` : "Starting position");
+    boardHost.innerHTML = boardHTML(line.frames[ply], flip, line.marks[ply], ply ? `Board after ${moveLabel(ply)} ${sans[ply - 1]}` : "Starting position", notes[ply]);
     pos.textContent = ply ? `${moveLabel(ply)} ${sans[ply - 1]}` : "Start";
     document.querySelectorAll("#moves button").forEach((b) => {
       const current = +b.dataset.ply === ply;
