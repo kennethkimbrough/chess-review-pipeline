@@ -20,6 +20,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  actions: write
 
 jobs:
   update:
@@ -39,6 +40,7 @@ jobs:
           rm sf.tar
           echo "STOCKFISH_PATH=$PWD/stockfish/stockfish-ubuntu-x86-64-avx2" >> "$GITHUB_ENV"
       - name: Fetch, analyse and review
+        id: run
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           MINUTES: ${{ github.event_name == 'schedule' && '100' || github.event.inputs.minutes || '30' }}
@@ -62,6 +64,11 @@ jobs:
             git push -q origin HEAD:main
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Queue another run while work remains
+        if: steps.run.outputs.more == 'true' && steps.save.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run update.yml --ref main -f minutes=100
       - name: Build site
         if: always() && (steps.save.outputs.changed == 'true' || github.event_name != 'schedule')
         id: site
