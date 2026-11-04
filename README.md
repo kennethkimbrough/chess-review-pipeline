@@ -61,4 +61,4 @@ python -m tracker build
 python -m http.server --directory site
 ```
 
-Live analysis on the site runs [Stockfish.js](https://github.com/nmrugg/stockfish.js) 19 Lite in the browser, with a slower compatibility build as a fallback (GPLv3, see `site/vendor/stockfish`). Board replay uses [chess.js](https://github.com/jhlywa/chess.js) (BSD 2-Clause, see `site/vendor`).
+Live analysis on the site runs [Stockfish.js](https://github.com/nmrugg/stockfish.js) 19 Lite in the browser, with a slower compatibility build as a fallback (GPLv3, see `site/vendor/stockfish`). Board pieces are the cburnett set by Colin M.L. Burnett (GPLv2+, see `site/vendor/pieces`). Board replay uses [chess.js](https://github.com/jhlywa/chess.js) (BSD 2-Clause, see `site/vendor`).
