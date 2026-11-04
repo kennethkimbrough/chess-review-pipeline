@@ -14,7 +14,7 @@ URL = "https://openrouter.ai/api/v1/chat/completions"
 REVIEW_VERSION = 2
 SAN = r"(?:O-O(?:-O)?|[KQRBN][a-h1-8]?x?[a-h][1-8]|[a-h]x[a-h][1-8](?:=[QRBN])?|[a-h][1-8](?:=[QRBN])?)[+#]?"
 NUMBERED = re.compile(rf"(?<![\w.])(\d+)(\.{{1,3}})\s?({SAN})")
-PIECE_MOVE = re.compile(r"(?<![A-Za-z0-9.])(?:[KQRBN][a-h1-8]?x?[a-h][1-8]|[a-h]x[a-h][1-8]|O-O(?:-O)?)(?:=[QRBN])?[+#]?")
+PIECE_MOVE = re.compile(r"(?<![A-Za-z0-9.\-])(?:[KQRBN][a-h1-8]?x?[a-h][1-8]|[a-h]x[a-h][1-8]|O-O(?:-O)?)(?:=[QRBN])?[+#]?")
 MOVE_NUMBER = re.compile(r"\bmoves? (\d+)", re.I)
 MATERIAL_CLAIM = re.compile(
     r"\b(?:los(?:e|es|t|ing)|wins?|won|winning|hang\w*|hung|drop\w*|g[ai]ve up|giving up|sacrific\w+)\b"
@@ -357,7 +357,7 @@ def in_scope(store, config):
 
 
 def needs_review(game):
-    return (game.get("review") or {}).get("v") != REVIEW_VERSION and game.get("review_failures", 0) < 3
+    return (game.get("review") or {}).get("v") != REVIEW_VERSION and game.get("review_failures", 0) < 6
 
 
 def needs_analysis(game):

@@ -426,6 +426,14 @@ def test_held_games_are_skipped_and_imports_apply_once(tmp_path):
     assert review.import_reviews(store) == 0
 
 
+def test_numbered_long_castling_is_not_read_as_short_castling():
+    game = analysed_game()
+    game["moves"] = "e4 e5 d4 d5 Bf4 Bf5 Nc3 Nc6 Qd2 Qd7 O-O-O O-O-O"
+    game["analysis"]["evals"] = [0] * 13
+    assert review.parse_review(good_reply(focus="Compare your options before 6.O-O-O, and 2.d4 too.", headline="Long castling on both sides.", turning_point="6.O-O-O set the plan.", sections=[{"text": "You played 6.O-O-O."}]), game)
+    assert not review.PIECE_MOVE.findall("6.O-O-O")
+
+
 def test_old_style_reviews_are_replaced(tmp_path):
     store = make_store(tmp_path, 1)
     store.games["g0"]["review"] = {"summary": "old"}
