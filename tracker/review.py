@@ -319,7 +319,19 @@ def in_scope(store, config):
         store.state_changed = True
     start = store.state.get("review_from_at", float("inf"))
     speeds = set(config.get("review_all_speeds", []))
-    return [g for g in games if g["at"] >= start or g["speed"] in speeds or g.get("site") == "chesscom"]
+    extra_start = float("inf")
+    extra = config.get("review_recent_batch")
+    if extra:
+        key = f"batch_from_at_{extra['speed']}_{extra['count']}"
+        if key not in store.state:
+            waiting = [g for g in lichess_games if g["speed"] == extra["speed"] and needs_review(g) and g["at"] < start]
+            if waiting:
+                store.state[key] = waiting[min(extra["count"], len(waiting)) - 1]["at"]
+                store.state_changed = True
+        extra_start = store.state.get(key, float("inf"))
+        extra_speed = extra["speed"]
+    return [g for g in games if g["at"] >= start or g["speed"] in speeds or g.get("site") == "chesscom"
+            or (extra and g["speed"] == extra_speed and g.get("site", "lichess") == "lichess" and g["at"] >= extra_start)]
 
 
 def needs_review(game):

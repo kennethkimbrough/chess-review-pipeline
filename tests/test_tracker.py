@@ -404,6 +404,17 @@ def test_matcher_returns_three_shares_and_only_real_champions():
     assert overall["games"] == 1 and len(overall["top"]) == 3
 
 
+def test_recent_batch_takes_the_newest_unreviewed_games_of_that_speed(tmp_path):
+    store = make_store(tmp_path, 6)
+    for name in ("g0", "g1", "g2", "g3"):
+        store.games[name]["speed"] = "blitz"
+    store.games["g4"]["speed"] = "bullet"
+    config = {**CONFIG, "review_latest": 1, "review_recent_batch": {"speed": "blitz", "count": 2}}
+    assert {g["id"] for g in review.in_scope(store, config)} == {"g5", "g3", "g2"}
+    store.games["g3"]["review"] = {"v": review.REVIEW_VERSION}
+    assert {g["id"] for g in review.in_scope(store, config)} == {"g5", "g3", "g2"}
+
+
 def test_old_style_reviews_are_replaced(tmp_path):
     store = make_store(tmp_path, 1)
     store.games["g0"]["review"] = {"summary": "old"}

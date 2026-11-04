@@ -40,6 +40,7 @@ All of these are in `config.json`:
 | `reviews_enabled` | Turns ongoing reviews on or off. |
 | `review_latest` | How many recent games to review when reviews first start. |
 | `review_all_speeds` | Time controls to review across the full history. |
+| `review_recent_batch` | A one-time batch of older games to review, by time control and count. |
 | `monthly_limit_usd` | Pauses reviews until next month after this much spending. |
 | `monthly_limit_overrides` | A different limit for a named month, such as `2026-11`. |
 | `max_cost_usd` | Stops reviews once total tracked spending reaches this amount. |
