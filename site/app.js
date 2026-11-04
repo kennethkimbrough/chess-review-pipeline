@@ -291,14 +291,24 @@ function plyForMove(number, dots, san, sans) {
   return sans[ply - 1] && bareMove(sans[ply - 1]) === bareMove(san) ? ply : ply - 1;
 }
 
-function linkMoves(text, detail, gameId) {
+function shownMove(prefix, san, ply, notes, sans) {
+  const played = ply >= 1 && sans[ply - 1] && bareMove(sans[ply - 1]) === bareMove(san);
+  const category = played ? notes[ply] : null;
+  return `${prefix}${san.replace(/[!?]+$/, "")}${category && NOTE[category] ? NOTE[category] : ""}`;
+}
+
+function linkMoves(text, detail, gameId, notes) {
   const sans = (detail.moves || "").split(" ").filter(Boolean);
   if (detail.fen || !sans.length) return esc(text);
   const pattern = new RegExp(`(?<![\\w.])(\\d+)(\\.{1,3})\\s?(${SAN_TOKEN})|\\b([Mm]ove )(\\d+)\\b`, "g");
   let html = "", last = 0;
   for (const match of text.matchAll(pattern)) {
     let ply = null, shown = match[0], prefix = "";
-    if (match[3]) ply = plyForMove(+match[1], match[2], match[3], sans);
+    if (match[3]) {
+      ply = plyForMove(+match[1], match[2], match[3], sans);
+      const actual = (+match[1] - 1) * 2 + (match[2] === "." ? 1 : 2);
+      shown = shownMove(`${match[1]}${match[2]}`, match[3], actual, notes, sans);
+    }
     else {
       prefix = match[4];
       shown = match[0].slice(prefix.length);
@@ -313,7 +323,7 @@ function linkMoves(text, detail, gameId) {
   return html + esc(text.slice(last));
 }
 
-function linkLine(line, detail, gameId) {
+function linkLine(line, detail, gameId, notes) {
   const sans = (detail.moves || "").split(" ").filter(Boolean);
   if (detail.fen || !sans.length) return esc(line);
   let next = null;
@@ -322,34 +332,37 @@ function linkLine(line, detail, gameId) {
     if (numbered) {
       const ply = plyForMove(+numbered[1], numbered[2], numbered[3], sans);
       next = ply === null ? null : ply + 1;
-      return ply === null ? esc(token) : moveRef(token, ply, gameId);
+      const actual = (+numbered[1] - 1) * 2 + (numbered[2] === "." ? 1 : 2);
+      const label = shownMove(`${numbered[1]}${numbered[2]}`, numbered[3], actual, notes, sans);
+      return ply === null ? esc(label) : moveRef(label, ply, gameId);
     }
     if (next && sans[next - 1] && bareMove(sans[next - 1]) === bareMove(token)) {
       const ply = next;
       next += 1;
-      return moveRef(token, ply, gameId);
+      return moveRef(shownMove("", token, ply, notes, sans), ply, gameId);
     }
     next = null;
     return esc(token);
   }).join(" ");
 }
 
-function reviewHTML(detail, showMoments, gameId) {
+function reviewHTML(detail, showMoments, gameId, row) {
   const r = detail.review;
   if (!r) return "";
+  const notes = annotations(detail, row);
   if (r.sections) {
     const parts = r.sections.map((sec) => {
-      const line = sec.line ? `<p class="line">${linkLine(sec.line, detail, gameId)}</p>` : "";
-      return `<p>${linkMoves(sec.text, detail, gameId)}</p>${line}`;
+      const line = sec.line ? `<p class="line">${linkLine(sec.line, detail, gameId, notes)}</p>` : "";
+      return `<p>${linkMoves(sec.text, detail, gameId, notes)}</p>${line}`;
     }).join("");
-    return `<div class="review"><p class="headline">${esc(r.headline)}</p>${parts}<h3>Turning point</h3><p>${linkMoves(r.turning_point, detail, gameId)}</p><div class="focus"><h3>Work on this</h3><p>${linkMoves(r.focus, detail, gameId)}</p></div></div>`;
+    return `<div class="review"><p class="headline">${esc(r.headline)}</p>${parts}<h3>Turning point</h3><p>${linkMoves(r.turning_point, detail, gameId, notes)}</p><div class="focus"><h3>Work on this</h3><p>${linkMoves(r.focus, detail, gameId, notes)}</p></div></div>`;
   }
-  const notes = showMoments && r.moments && r.moments.length
+  const moments = showMoments && r.moments && r.moments.length
     ? `<h3>Moments to look at</h3><ul class="moments">${r.moments.map((m) => {
         const found = (detail.moments || []).find((x) => x.ply === m.ply);
         return `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(found ? found.san : "")}</b><span class="why">${esc(m.note)}</span></button></li>`;
       }).join("")}</ul>` : "";
-  return `<div class="review"><p>${esc(r.summary)}</p><h3>Turning point</h3><p>${esc(r.turning_point)}</p>${notes}<div class="focus"><h3>Work on this</h3><p>${esc(r.focus)}</p></div></div>`;
+  return `<div class="review"><p>${esc(r.summary)}</p><h3>Turning point</h3><p>${esc(r.turning_point)}</p>${moments}<div class="focus"><h3>Work on this</h3><p>${esc(r.focus)}</p></div></div>`;
 }
 
 function playerBar(row, mine) {
@@ -512,7 +525,7 @@ async function latestReview() {
     ply = ply ? ply.ply : (line ? line.frames.length - 1 : 0);
     const board = line ? boardHTML(line.frames[ply], row[C.color] === "b", line.marks[ply], `Board after ${moveLabel(ply)}`, annotations(detail, row)[ply]) : "";
     return `<div class="game-head"><div>${playerBar(row, false)}${boardRow(board, detail.evals ? detail.evals[ply] : null, row[C.color] === "b")}${playerBar(row, true)}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
-      <div>${headline(row)}<p class="meta">${metaLine(row)}</p>${reviewHTML(detail, false, row[C.id])}<p><a href="#/game/${row[C.id]}">Replay this game</a></p></div></div>`;
+      <div>${headline(row)}<p class="meta">${metaLine(row)}</p>${reviewHTML(detail, false, row[C.id], row)}<p><a href="#/game/${row[C.id]}">Replay this game</a></p></div></div>`;
   }
   return `<h1 style="font-size:clamp(1.5rem,3vw,2rem);margin-top:12px">Your reviews will appear here</h1><p class="hint">${data.total.toLocaleString()} games collected and ${data.analysed.toLocaleString()} analysed so far. Reviews are written as analysis finishes.</p>`;
 }
@@ -660,7 +673,7 @@ async function gameView(id, startPly) {
       <div id="variation" class="variation" hidden></div>
       <div class="engine-panel"><button id="engine-toggle" aria-pressed="false">Live engine</button><p class="note" id="engine-note">Tap a piece on the board to try your own moves.</p><div id="engine-lines"></div></div>
       ${moveTable(detail, sans, row)}
-    </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true)}${summaryHTML(detail, row)}${styleHTML(detail)}
+    </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true, undefined, row)}${summaryHTML(detail, row)}${styleHTML(detail)}
       ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
       <p><a href="${esc(siteUrl)}" rel="noopener">Open on ${SITE_NAMES[row[C.site]]}</a></p></div></div>
     ${others.length ? `<section><h2>${reviewed.size ? "Other mistakes and blunders" : "Mistakes and blunders"}</h2><ul class="moments">${others.map((m) => `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(m.san)} <span class="tag-${m.cat}">${m.cat}</span></b><span class="why">${pawns(m.before)} to ${pawns(m.after)}${m.best ? `, ${esc(m.best)} was better` : ""}${m.tags.length ? `, ${m.tags.map((t) => TAG_SHORT[t]).join(", ")}` : ""}</span></button></li>`).join("")}</ul></section>` : ""}
