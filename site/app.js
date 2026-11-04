@@ -145,7 +145,7 @@ function goalSection() {
     });
   });
   if (!rows.length) return "";
-  return `<section><h2>Road to ${data.goal}</h2><div class="table-wrap"><table><thead><tr><th>Site</th><th>Time control</th><th class="num">Rating</th><th>Goal</th><th class="num">Rated games</th><th class="num">Won</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
+  return `<section><h2>Road to ${data.goal}</h2><div class="table-wrap"><table class="goal-table"><thead><tr><th>Site</th><th>Time control</th><th class="num">Rating</th><th>Goal</th><th class="num">Rated games</th><th class="num">Won</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
 }
 
 function ratingChart(host, days, site) {
