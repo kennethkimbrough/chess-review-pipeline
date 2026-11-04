@@ -1,5 +1,5 @@
 "use strict";
-const C = { id: 0, at: 1, speed: 2, rated: 3, color: 4, rating: 5, diff: 6, opp: 7, oppRating: 8, result: 9, family: 10, acc: 11, blunders: 12, mistakes: 13, reviewed: 14, site: 15, bot: 16, sacrifices: 17, plies: 18, great: 19 };
+const C = { id: 0, at: 1, speed: 2, rated: 3, color: 4, rating: 5, diff: 6, opp: 7, oppRating: 8, result: 9, family: 10, acc: 11, blunders: 12, mistakes: 13, reviewed: 14, site: 15, bot: 16, sacrifices: 17, plies: 18, great: 19, comeback: 20 };
 const SITE_NAMES = { lichess: "Lichess", chesscom: "Chess.com" };
 const SPEEDS = ["bullet", "blitz", "rapid", "classical"];
 const SERIES = { bullet: "--s1", blitz: "--s2", rapid: "--s3", classical: "--s4" };
@@ -473,7 +473,7 @@ const ICONS = {
 
 function headline(row) {
   const rating = row[C.oppRating] ? ` (${row[C.oppRating]})` : "";
-  return `<h1><span class="verdict ${row[C.result]}">${resultWord[row[C.result]]}</span> against ${esc(row[C.opp])}${rating}</h1>`;
+  return `<h1><span class="verdict ${row[C.result]}">${resultWord[row[C.result]]}</span> against <a class="plain" href="#/opponent/${encodeURIComponent(row[C.opp])}">${esc(row[C.opp])}</a>${rating}</h1>`;
 }
 function metaLine(row) {
   const color = row[C.color] === "w" ? "White" : "Black";
@@ -624,7 +624,7 @@ async function latestReview() {
 async function home() {
   setNav("home");
   const lead = await latestReview();
-  app.innerHTML = lead + styleSection() + goalSection() + chartSection() + mistakesSection() + openingsSection();
+  app.innerHTML = lead + styleSection() + goalSection() + progressSection() + chartSection() + clockSection() + mistakesSection() + openingsSection() + opponentsSection();
   const host = document.getElementById("chart");
   let days = 0, site = "lichess";
   ratingChart(host, days, site);
@@ -639,7 +639,7 @@ async function home() {
   choose("chart-site", (b) => { site = b.dataset.site; });
 }
 
-const listState = { site: "", speed: "", result: "", q: "", sort: "newest", shown: 50 };
+const listState = { site: "", speed: "", result: "", q: "", sort: "newest", from: "", to: "", min: "", max: "", comeback: false, upset: false, reviewed: false, brilliant: false, shown: 50 };
 const SORTS = { newest: "Newest first", oldest: "Oldest first", best: "Highest accuracy", worst: "Lowest accuracy", opponentHigh: "Highest-rated opponent", opponentLow: "Lowest-rated opponent", sacrifices: "Most brilliant moves", great: "Most great moves" };
 function sortGames(list) {
   // Very short games can score 100%, so they rank after full games.
@@ -667,7 +667,11 @@ function gamesView() {
     <select id="site" aria-label="Site"><option value="">All sites</option>${Object.entries(SITE_NAMES).map(([k, v]) => `<option value="${k}" ${listState.site === k ? "selected" : ""}>${v}</option>`).join("")}</select>
     <select id="speed" aria-label="Time control"><option value="">All time controls</option>${["ultraBullet", ...SPEEDS, "correspondence"].map((s) => `<option value="${s}" ${listState.speed === s ? "selected" : ""}>${cap(s)}</option>`).join("")}</select>
     <select id="result" aria-label="Result"><option value="">All results</option>${["win", "loss", "draw"].map((r) => `<option value="${r}" ${listState.result === r ? "selected" : ""}>${cap(r)}</option>`).join("")}</select>
-  </div><ul class="rows" id="rows"></ul><p><button id="more" hidden>Show 50 more</button></p>`;
+  </div><details class="more-filters"><summary>More filters</summary><div class="filters">
+    <label>From <input id="f-from" type="date" value="${esc(listState.from)}"></label><label>To <input id="f-to" type="date" value="${esc(listState.to)}"></label>
+    <label>Opponent rating <input id="f-min" type="number" inputmode="numeric" placeholder="Min" aria-label="Minimum opponent rating" value="${esc(listState.min)}"></label><label>to <input id="f-max" type="number" inputmode="numeric" placeholder="Max" aria-label="Maximum opponent rating" value="${esc(listState.max)}"></label></div>
+    <div class="filters checks"><label><input id="f-comeback" type="checkbox" ${listState.comeback ? "checked" : ""}> Wins from lost positions</label><label><input id="f-upset" type="checkbox" ${listState.upset ? "checked" : ""}> Upset wins (100+ higher rated)</label><label><input id="f-brilliant" type="checkbox" ${listState.brilliant ? "checked" : ""}> Has a brilliant move</label><label><input id="f-reviewed" type="checkbox" ${listState.reviewed ? "checked" : ""}> Reviewed</label></div></details>
+    <ul class="rows" id="rows"></ul><p><button id="more" hidden>Show 50 more</button></p>`;
   const draw = () => {
     const q = listState.q.toLowerCase();
     const list = [];
@@ -676,21 +680,29 @@ function gamesView() {
       if (listState.site && r[C.site] !== listState.site) continue;
       if (listState.speed && r[C.speed] !== listState.speed) continue;
       if (listState.result && r[C.result] !== listState.result) continue;
+      if (listState.from && r[C.at] < Date.parse(listState.from)) continue;
+      if (listState.to && r[C.at] >= Date.parse(listState.to) + 864e5) continue;
+      if (listState.min && !(r[C.oppRating] >= +listState.min)) continue;
+      if (listState.max && !(r[C.oppRating] <= +listState.max)) continue;
+      if (listState.comeback && !r[C.comeback]) continue;
+      if (listState.upset && !(r[C.result] === "win" && r[C.oppRating] && r[C.rating] && r[C.oppRating] - r[C.rating] >= 100)) continue;
+      if (listState.brilliant && !r[C.sacrifices]) continue;
+      if (listState.reviewed && !r[C.reviewed]) continue;
       if (q && !r[C.opp].toLowerCase().includes(q) && !r[C.family].toLowerCase().includes(q)) continue;
       list.push(r);
     }
     document.getElementById("count").textContent = `${list.length.toLocaleString()} of ${data.total.toLocaleString()} games. ${data.analysed.toLocaleString()} analysed, ${data.reviewed.toLocaleString()} reviewed.`;
     sortGames(list);
-    document.getElementById("rows").innerHTML = list.slice(0, listState.shown).map((r) => {
-      const errs = r[C.blunders] == null ? "" : `, ${r[C.blunders]} ${r[C.blunders] === 1 ? "blunder" : "blunders"}`;
-      const acc = r[C.acc] == null ? "" : `${Math.round(r[C.acc])}%`;
-      return `<li><a href="#/game/${r[C.id]}"><span class="res ${r[C.result]}">${resultWord[r[C.result]]}</span><span class="opp">${esc(r[C.opp])}${r[C.oppRating] ? ` (${r[C.oppRating]})` : ""}</span><span class="acc">${acc}</span><span class="dt">${new Date(r[C.at]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })}</span><span class="sub">${SITE_NAMES[r[C.site]]}, ${cap(r[C.speed])}${r[C.bot] ? ", bot" : ""}, ${esc(r[C.family])}${errs}${r[C.sacrifices] ? `, ${plural(r[C.sacrifices], "brilliant move")}` : ""}${r[C.great] ? `, ${plural(r[C.great], "great move")}` : ""}${r[C.reviewed] ? ", reviewed" : ""}</span></a></li>`;
-    }).join("") || '<li class="note">No games match. Clear a filter to see more.</li>';
+    document.getElementById("rows").innerHTML = list.slice(0, listState.shown).map(gameRow).join("") || '<li class="note">No games match. Clear a filter to see more.</li>';
     document.getElementById("more").hidden = list.length <= listState.shown;
   };
   showRefresh();
   const reset = (key) => (event) => { listState[key] = event.target.value; listState.shown = 50; draw(); };
   document.getElementById("q").addEventListener("input", reset("q"));
+  for (const [id, key] of [["f-from", "from"], ["f-to", "to"], ["f-min", "min"], ["f-max", "max"]]) document.getElementById(id).addEventListener("change", reset(key));
+  for (const [id, key] of [["f-comeback", "comeback"], ["f-upset", "upset"], ["f-brilliant", "brilliant"], ["f-reviewed", "reviewed"]]) {
+    document.getElementById(id).addEventListener("change", (event) => { listState[key] = event.target.checked; listState.shown = 50; draw(); });
+  }
   document.getElementById("sort").addEventListener("change", reset("sort"));
   document.getElementById("site").addEventListener("change", reset("site"));
   document.getElementById("speed").addEventListener("change", reset("speed"));
@@ -766,7 +778,7 @@ async function gameView(id, startPly) {
       <p class="play-status" id="play-status" aria-live="polite" hidden></p>
       <div class="engine-panel"><button id="engine-toggle" aria-pressed="false">Live engine</button><p class="note" id="engine-note">Drag or tap a piece on the board to try your own moves.</p><div id="engine-lines"></div></div>
       ${moveTable(detail, sans, row)}
-    </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true, undefined, row)}${summaryHTML(detail, row)}${styleHTML(detail)}
+    </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true, undefined, row)}${summaryHTML(detail, row)}${clockChart(detail, row)}${styleHTML(detail)}
       ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
       <p><a href="${esc(siteUrl)}" rel="noopener">Open on ${SITE_NAMES[row[C.site]]}</a></p></div></div>
     ${others.length ? `<section><h2>${reviewed.size ? "Other mistakes and blunders" : "Mistakes and blunders"}</h2><ul class="moments">${others.map((m) => `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(m.san)} <span class="tag-${m.cat}">${m.cat}</span></b><span class="why">${pawns(m.before)} to ${pawns(m.after)}${m.best ? `, ${esc(m.best)} was better` : ""}${m.tags.length ? `, ${m.tags.map((t) => TAG_SHORT[t]).join(", ")}` : ""}</span></button></li>`).join("")}</ul></section>` : ""}
@@ -1109,6 +1121,393 @@ async function gameView(id, startPly) {
   go(ply);
 }
 
+
+const THEME_NAMES = { all: "All themes", hung_piece: "Hanging pieces", missed_material: "Winning a piece", allowed_mate: "Stopping mate", missed_mate: "Finding mate", low_clock: "Low on time", opening: "Opening", middlegame: "Middlegame", endgame: "Endgame" };
+const PROGRESS_KEY = "pinkroses-practice-v1";
+const REVIEW_DAYS = [0, 1, 3, 7, 21, 60];
+
+function loadPractice() {
+  try { return JSON.parse(localStorage.getItem(PROGRESS_KEY)) || { items: {}, solved: 0, attempts: 0, streak: 0, best: 0 }; }
+  catch { return { items: {}, solved: 0, attempts: 0, streak: 0, best: 0 }; }
+}
+function savePractice(state) {
+  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(state)); } catch { /* progress just won't persist */ }
+}
+
+let puzzleData = null;
+async function getPuzzles() {
+  if (!puzzleData) {
+    const response = await fetch("data/puzzles.json");
+    if (!response.ok) throw new Error("Could not load practice positions");
+    puzzleData = await response.json();
+  }
+  return puzzleData;
+}
+
+function matchesTheme(p, theme) {
+  if (theme === "all") return true;
+  return p.phase === theme || p.tags.includes(theme);
+}
+
+function choosePuzzle(list, state, skip) {
+  const now = Date.now();
+  const due = list.filter((p) => state.items[p.id] && state.items[p.id].due <= now && p.id !== skip);
+  if (due.length) return due[0];
+  const fresh = list.filter((p) => !state.items[p.id] && p.id !== skip);
+  if (fresh.length) return fresh[Math.floor(Math.random() * Math.min(fresh.length, 150))];
+  return null;
+}
+
+function wirePlayableBoard(host, { getFen, canMove, onPick }) {
+  let selected = null, targets = [], drag = null, skipClick = false;
+  const mark = () => {
+    host.querySelectorAll(".selected,.can-move,.can-take").forEach((c) => c.classList.remove("selected", "can-move", "can-take"));
+    if (!selected) return;
+    const from = host.querySelector(`[data-sq="${selected}"]`);
+    if (from) from.classList.add("selected");
+    for (const t of targets) {
+      const cell = host.querySelector(`[data-sq="${t.to}"]`);
+      if (cell) cell.classList.add(t.captured ? "can-take" : "can-move");
+    }
+  };
+  const clear = () => { selected = null; targets = []; mark(); };
+  const choose = (from, to) => { clear(); onPick(from, to); };
+  host.addEventListener("pointerdown", (event) => {
+    if (event.button || !canMove()) return;
+    skipClick = false;
+    const cell = event.target.closest("[data-sq]");
+    if (!cell) return;
+    const game = new Chess(getFen());
+    const piece = game.get(cell.dataset.sq);
+    if (!piece || piece.color !== game.turn()) return;
+    const image = cell.querySelector(".pc");
+    drag = { from: cell.dataset.sq, x: event.clientX, y: event.clientY, moved: false, was: selected === cell.dataset.sq, size: cell.offsetWidth, src: image ? image.src : "" };
+    selected = cell.dataset.sq;
+    targets = game.moves({ square: selected, verbose: true });
+    mark();
+    host.setPointerCapture(event.pointerId);
+    skipClick = true;
+  });
+  host.addEventListener("pointermove", (event) => {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 6) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      drag.ghost = document.createElement("img");
+      drag.ghost.src = drag.src;
+      drag.ghost.alt = "";
+      drag.ghost.className = "drag-piece";
+      drag.ghost.style.width = drag.ghost.style.height = `${drag.size}px`;
+      document.body.appendChild(drag.ghost);
+    }
+    drag.ghost.style.left = `${event.clientX - drag.size / 2}px`;
+    drag.ghost.style.top = `${event.clientY - drag.size / 2}px`;
+  });
+  host.addEventListener("pointerup", (event) => {
+    if (!drag) return;
+    const { moved, was, from, ghost } = drag;
+    if (ghost) ghost.remove();
+    drag = null;
+    setTimeout(() => { skipClick = false; }, 0);
+    if (!moved) { if (was) clear(); return; }
+    const under = document.elementFromPoint(event.clientX, event.clientY);
+    const cell = under && under.closest("[data-sq]");
+    if (cell && host.contains(cell) && targets.some((t) => t.to === cell.dataset.sq)) choose(from, cell.dataset.sq);
+    else clear();
+  });
+  host.addEventListener("pointercancel", () => { if (drag && drag.ghost) drag.ghost.remove(); drag = null; skipClick = false; clear(); });
+  host.addEventListener("click", (event) => {
+    if (skipClick) { skipClick = false; return; }
+    if (!canMove()) return;
+    const cell = event.target.closest("[data-sq]");
+    if (cell && selected && targets.some((t) => t.to === cell.dataset.sq)) choose(selected, cell.dataset.sq);
+  });
+  return { clear, repaint: mark };
+}
+
+async function practiceView(themeArg) {
+  setNav("practice");
+  const all = await getPuzzles();
+  let theme = THEME_NAMES[themeArg] ? themeArg : "all";
+  const state = loadPractice();
+  const counts = {};
+  for (const key of Object.keys(THEME_NAMES)) counts[key] = all.filter((p) => matchesTheme(p, key)).length;
+  app.innerHTML = `<h1 class="page-title">Practice your mistakes</h1>
+    <p class="hint">Each position comes from one of your own games, right before a blunder. Find the better move. Positions you miss come back sooner. Your progress is saved in this browser.</p>
+    <div class="filters"><select id="theme" aria-label="Theme">${Object.keys(THEME_NAMES).filter((k) => counts[k]).map((k) => `<option value="${k}" ${k === theme ? "selected" : ""}>${THEME_NAMES[k]} (${counts[k].toLocaleString()})</option>`).join("")}</select></div>
+    <p class="meta" id="practice-stats"></p>
+    <div class="game-head"><div><div class="board-slot" id="pz-board"></div></div><div>
+      <h2 id="pz-title"></h2><p class="meta" id="pz-meta"></p><p id="pz-message" aria-live="polite"></p>
+      <div class="controls" id="pz-actions"></div><div class="controls" id="pz-steps" hidden><button id="pz-prev" aria-label="Previous move">${ICONS.prev}</button><button id="pz-next" aria-label="Next move">${ICONS.next}</button><span class="position" id="pz-pos"></span></div>
+    </div></div>`;
+  const host = document.getElementById("pz-board");
+  const title = document.getElementById("pz-title");
+  const meta = document.getElementById("pz-meta");
+  const message = document.getElementById("pz-message");
+  const actions = document.getElementById("pz-actions");
+  const stepsBox = document.getElementById("pz-steps");
+  let puzzle = null, stage = "solve", firstTry = true, flip = false, checking = false;
+  let frames = [], marks = [], names = [], index = 0, attemptMark = null;
+
+  const paintStats = () => {
+    const seen = Object.keys(state.items).length;
+    const due = Object.values(state.items).filter((i) => i.due <= Date.now()).length;
+    const rate = state.attempts ? Math.round(state.solved * 100 / state.attempts) : 0;
+    document.getElementById("practice-stats").textContent = `${seen.toLocaleString()} tried, ${rate}% solved first try, streak ${state.streak} (best ${state.best}), ${due} due for review.`;
+  };
+  const paint = (note) => {
+    const fen = stage === "solve" ? puzzle.fen : frames[index];
+    const mark = stage === "solve" ? attemptMark : marks[index];
+    host.innerHTML = boardHTML(fen, flip, mark, "Practice position", note || null);
+    board.repaint();
+  };
+  const record = (solved) => {
+    const item = state.items[puzzle.id] || { box: 0 };
+    state.attempts += 1;
+    if (solved) {
+      state.solved += 1;
+      state.streak += 1;
+      state.best = Math.max(state.best, state.streak);
+      item.box = Math.min(item.box + 1, REVIEW_DAYS.length - 1);
+    } else {
+      state.streak = 0;
+      item.box = 0;
+    }
+    item.due = Date.now() + (solved ? REVIEW_DAYS[item.box] : 0.5) * 864e5;
+    state.items[puzzle.id] = item;
+    savePractice(state);
+    paintStats();
+  };
+  const reveal = (text) => {
+    stage = "done";
+    frames = [puzzle.fen];
+    marks = [null];
+    names = ["Start"];
+    const game = new Chess(puzzle.fen);
+    for (const san of puzzle.line) {
+      const move = game.move(san, { sloppy: true });
+      if (!move) break;
+      frames.push(game.fen());
+      marks.push([move.from, move.to]);
+      names.push(move.san);
+    }
+    index = Math.min(1, frames.length - 1);
+    message.textContent = text;
+    stepsBox.hidden = frames.length < 2;
+    showStep();
+    actions.innerHTML = `<button id="pz-again">Next position</button><a class="button-link" href="#/game/${esc(puzzle.game)}/${puzzle.ply}">Open the game</a>`;
+    document.getElementById("pz-again").onclick = nextPuzzle;
+  };
+  const showStep = () => {
+    paint(null);
+    document.getElementById("pz-pos").textContent = index ? `Engine line: ${names.slice(1, index + 1).join(" ")}` : "Start";
+  };
+  const finishMiss = () => {
+    record(false);
+    const drop = `${pawns(puzzle.before)} to ${pawns(puzzle.after)}`;
+    reveal(`The move was ${puzzle.line[0]}. In the game you played ${puzzle.played}, going from ${drop}. This one comes back soon.`);
+  };
+  const correct = (text) => {
+    if (firstTry) record(true); else record(false);
+    const drop = `${pawns(puzzle.before)} to ${pawns(puzzle.after)}`;
+    reveal(`${text} In the game you played ${puzzle.played}, going from ${drop}.`);
+  };
+  const onPick = async (from, to) => {
+    if (stage !== "solve" || checking) return;
+    const game = new Chess(puzzle.fen);
+    const target = new Chess(puzzle.fen).move(puzzle.line[0], { sloppy: true });
+    const promotion = target && target.from === from && target.to === to ? target.promotion : "q";
+    const move = game.move({ from, to, promotion });
+    if (!move) return;
+    attemptMark = [from, to];
+    host.innerHTML = boardHTML(game.fen(), flip, attemptMark, "Your move", null);
+    if (bareMove(move.san) === bareMove(puzzle.line[0])) { correct("Correct!"); return; }
+    if (bareMove(move.san) === bareMove(puzzle.played)) {
+      message.textContent = `That's the move you played in the game, ${puzzle.played}. Look for something better.`;
+      firstTry = false;
+      attemptMark = null;
+      setTimeout(() => { if (stage === "solve") paint(null); }, 900);
+      return;
+    }
+    checking = true;
+    message.textContent = "Checking your move…";
+    const score = await checkMove(game.fen());
+    checking = false;
+    if (stage !== "solve") return;
+    const mine = puzzle.fen.split(" ")[1] === "w" ? 1 : -1;
+    if (score != null && winPercent(score * mine) >= winPercent(puzzle.before) - 5) {
+      correct(`${move.san} also works, about as well as the engine's ${puzzle.line[0]}.`);
+      return;
+    }
+    firstTry = false;
+    attemptMark = null;
+    paint(null);
+    message.textContent = score == null ? `Not the engine's move. Try again.` : `${move.san} isn't good enough${score != null ? ` (${pawns(score * mine)})` : ""}. Try again.`;
+  };
+  const checkMove = async (fen) => {
+    const listener = engine.listener;
+    engine.listener = () => {};
+    try {
+      engine.analyse(fen);
+      await new Promise((resolve) => setTimeout(resolve, engine.attempt ? 5000 : 1800));
+      const top = engine.lines["1"];
+      if (!top || engine.fen !== fen) return null;
+      return top.kind === "mate" ? (top.value > 0 ? 1000 : -1000) : Math.max(-1000, Math.min(1000, top.value));
+    } catch { return null; } finally {
+      engine.stop();
+      engine.listener = listener;
+    }
+  };
+  const board = wirePlayableBoard(host, { getFen: () => puzzle.fen, canMove: () => stage === "solve" && !checking, onPick });
+  const nextPuzzle = () => {
+    const list = all.filter((p) => matchesTheme(p, theme));
+    const chosen = choosePuzzle(list, state, puzzle && puzzle.id);
+    stepsBox.hidden = true;
+    if (!chosen) {
+      host.innerHTML = "";
+      title.textContent = "All caught up";
+      meta.textContent = "";
+      message.textContent = "Nothing is due in this theme. Pick another theme or come back later.";
+      actions.innerHTML = "";
+      return;
+    }
+    puzzle = chosen;
+    stage = "solve";
+    firstTry = true;
+    attemptMark = null;
+    flip = puzzle.fen.split(" ")[1] === "b";
+    title.textContent = `${puzzle.fen.split(" ")[1] === "w" ? "White" : "Black"} to move`;
+    meta.textContent = `${cap(puzzle.speed)} vs ${puzzle.opp}, ${dateText(puzzle.at)}. You're at ${pawns(puzzle.before)}.${puzzle.tags.length ? ` Theme: ${puzzle.tags.map((t) => THEME_NAMES[t] || t).join(", ")}.` : ""}`;
+    message.textContent = "Find the best move.";
+    actions.innerHTML = '<button id="pz-show">Show solution</button><button id="pz-skip">Skip</button>';
+    document.getElementById("pz-show").onclick = finishMiss;
+    document.getElementById("pz-skip").onclick = nextPuzzle;
+    paint(null);
+  };
+  document.getElementById("pz-prev").onclick = () => { if (index > 0) { index -= 1; showStep(); } };
+  document.getElementById("pz-next").onclick = () => { if (index < frames.length - 1) { index += 1; showStep(); } };
+  document.getElementById("theme").onchange = (event) => { theme = event.target.value; puzzle = null; nextPuzzle(); };
+  paintStats();
+  nextPuzzle();
+  cleanup = () => { engine.stop(); engine.listener = null; };
+}
+
+let openingData = null;
+async function openingsView(arg) {
+  setNav("openings");
+  if (!openingData) {
+    const response = await fetch("data/openings.json");
+    if (!response.ok) throw new Error("Could not load openings");
+    openingData = await response.json();
+  }
+  let color = arg === "black" ? "black" : "white";
+  let path = [];
+  app.innerHTML = `<h1 class="page-title">Your opening explorer</h1><p class="hint">Your own games, move by move. Score counts a draw as half a point. Error rate is how often that move was your mistake or blunder.</p>
+    <div class="controls"><button data-color="white">As White</button><button data-color="black">As Black</button><button id="op-back">Back a move</button></div>
+    <div class="game-head"><div><div class="board-slot" id="op-board"></div></div><div><p class="meta" id="op-line"></p><p id="op-stats"></p><div class="table-wrap" id="op-table"></div><div id="op-games"></div></div></div>`;
+  const nodeAt = () => {
+    let node = openingData[color];
+    for (const move of path) node = node.c[move];
+    return node;
+  };
+  const score = (n) => Math.round((n.w + n.d / 2) * 100 / n.n);
+  const draw = () => {
+    const node = nodeAt();
+    const game = new Chess();
+    let mark = null;
+    for (const san of path) { const m = game.move(san); mark = [m.from, m.to]; }
+    document.getElementById("op-board").innerHTML = boardHTML(game.fen(), color === "black", mark, "Opening position", null);
+    document.querySelectorAll("[data-color]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.color === color));
+    document.getElementById("op-line").textContent = path.length ? path.map((m, i) => (i % 2 ? m : `${i / 2 + 1}. ${m}`)).join(" ") : "Starting position";
+    document.getElementById("op-stats").textContent = `${node.n.toLocaleString()} games, ${node.w} wins, ${node.d} draws, ${node.l} losses, ${score(node)}% score.`;
+    const yourTurn = (path.length % 2 === 0) === (color === "white");
+    const rows = Object.entries(node.c).sort((a, b) => b[1].n - a[1].n);
+    document.getElementById("op-table").innerHTML = rows.length ? `<table><thead><tr><th>${yourTurn ? "Your move" : "Their move"}</th><th class="num">Games</th><th class="num">Score</th>${yourTurn ? '<th class="num">Error rate</th>' : ""}</tr></thead><tbody>${rows.map(([move, n]) => `<tr><td><button class="moveref" data-move="${esc(move)}">${esc(move)}</button></td><td class="num">${n.n.toLocaleString()}</td><td class="num">${score(n)}%</td>${yourTurn ? `<td class="num">${Math.round(n.e * 100 / n.n)}%</td>` : ""}</tr>`).join("")}</tbody></table>` : '<p class="note">Not enough games to go further from here.</p>';
+    const byId = new Map(data.games.map((r) => [r[C.id], r]));
+    document.getElementById("op-games").innerHTML = node.g.length ? `<h3 class="sub-head">Recent games from here</h3><ul class="rows">${node.g.map((id) => byId.get(id)).filter(Boolean).map(gameRow).join("")}</ul>` : "";
+  };
+  app.querySelector(".controls").addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    if (button.id === "op-back") path.pop();
+    else { color = button.dataset.color; path = []; }
+    draw();
+  });
+  document.getElementById("op-table").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-move]");
+    if (button) { path.push(button.dataset.move); draw(); }
+  });
+  draw();
+}
+
+function gameRow(r) {
+  const errs = r[C.blunders] == null ? "" : `, ${plural(r[C.blunders], "blunder")}`;
+  const acc = r[C.acc] == null ? "" : `${Math.round(r[C.acc])}%`;
+  return `<li><a href="#/game/${r[C.id]}"><span class="res ${r[C.result]}">${resultWord[r[C.result]]}</span><span class="opp">${esc(r[C.opp])}${r[C.oppRating] ? ` (${r[C.oppRating]})` : ""}</span><span class="acc">${acc}</span><span class="dt">${new Date(r[C.at]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })}</span><span class="sub">${SITE_NAMES[r[C.site]]}, ${cap(r[C.speed])}${r[C.bot] ? ", bot" : ""}, ${esc(r[C.family])}${errs}${r[C.sacrifices] ? `, ${plural(r[C.sacrifices], "brilliant move")}` : ""}${r[C.great] ? `, ${plural(r[C.great], "great move")}` : ""}${r[C.reviewed] ? ", reviewed" : ""}</span></a></li>`;
+}
+
+function opponentView(name) {
+  setNav("games");
+  const games = data.games.filter((r) => r[C.opp] === name).sort((a, b) => b[C.at] - a[C.at]);
+  if (!games.length) { app.innerHTML = '<h1 class="page-title">Opponent not found</h1><p><a href="#/games">Back to all games</a></p>'; return; }
+  const tally = (list) => list.reduce((t, r) => { t[r[C.result]] += 1; return t; }, { win: 0, draw: 0, loss: 0 });
+  const line = (t) => `${t.win} wins, ${t.draw} draws, ${t.loss} losses`;
+  const all = tally(games);
+  const asColor = (c) => games.filter((r) => r[C.color] === c);
+  const openings = {};
+  for (const r of games) { const o = openings[r[C.family]] || (openings[r[C.family]] = { n: 0, p: 0 }); o.n += 1; o.p += r[C.result] === "win" ? 1 : r[C.result] === "draw" ? .5 : 0; }
+  const acc = games.filter((r) => r[C.acc] != null);
+  app.innerHTML = `<h1 class="page-title">${esc(name)}</h1><p>${games.length} ${games.length === 1 ? "game" : "games"}: ${line(all)}.</p>
+    <p class="meta">As White: ${line(tally(asColor("w")))}. As Black: ${line(tally(asColor("b")))}.${acc.length ? ` Your average accuracy: ${Math.round(acc.reduce((s, r) => s + r[C.acc], 0) / acc.length)}%.` : ""}</p>
+    <section class="tight"><h2>Openings</h2><div class="table-wrap"><table><thead><tr><th>Opening</th><th class="num">Games</th><th class="num">Your score</th></tr></thead><tbody>${Object.entries(openings).sort((a, b) => b[1].n - a[1].n).slice(0, 8).map(([o, v]) => `<tr><td>${esc(o)}</td><td class="num">${v.n}</td><td class="num">${Math.round(v.p * 100 / v.n)}%</td></tr>`).join("")}</tbody></table></div></section>
+    <section class="tight"><h2>Games</h2><ul class="rows">${games.slice(0, 100).map(gameRow).join("")}</ul></section>`;
+}
+
+function opponentsSection() {
+  const counts = {};
+  for (const r of data.games) if (!r[C.bot] && !/^(Anonymous|Stockfish level)/.test(r[C.opp])) { const o = counts[r[C.opp]] || (counts[r[C.opp]] = { n: 0, p: 0 }); o.n += 1; o.p += r[C.result] === "win" ? 1 : r[C.result] === "draw" ? .5 : 0; }
+  const top = Object.entries(counts).filter(([, v]) => v.n >= 2).sort((a, b) => b[1].n - a[1].n).slice(0, 8);
+  if (!top.length) return "";
+  return `<section><h2>Most played opponents</h2><div class="table-wrap"><table><thead><tr><th>Opponent</th><th class="num">Games</th><th class="num">Your score</th></tr></thead><tbody>${top.map(([name, v]) => `<tr><td><a href="#/opponent/${encodeURIComponent(name)}">${esc(name)}</a></td><td class="num">${v.n}</td><td class="num">${Math.round(v.p * 100 / v.n)}%</td></tr>`).join("")}</tbody></table></div></section>`;
+}
+
+function clockSection() {
+  const rows = data.clock_stats || [];
+  if (!rows.length) return "";
+  const labels = rows[0].buckets.map((b) => b.label);
+  return `<section><h2>Mistakes by clock</h2><p class="hint">Mistakes and blunders per 100 of your moves, by how much of your starting time was left.</p><div class="table-wrap"><table><thead><tr><th>Time control</th>${labels.map((l) => `<th class="num">${l}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr><td>${cap(r.speed)}</td>${r.buckets.map((b) => `<td class="num">${b.rate == null ? "n/a" : b.rate.toFixed(1)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></section>`;
+}
+
+function clockChart(detail, row) {
+  const clocks = detail.clocks;
+  if (!clocks || clocks.length < 4) return "";
+  const top = Math.max(...clocks, 1), W = 600, H = 120, m = 34;
+  const x = (i) => m + i / (clocks.length - 1) * (W - m - 8);
+  const y = (v) => 8 + (top - v) / top * (H - 28);
+  const path = (start) => clocks.map((v, i) => [i, v]).filter(([i]) => i % 2 === start).map(([i, v], k) => `${k ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join("");
+  const mine = row[C.color] === "w" ? 0 : 1;
+  const fmt = (s) => s >= 60 ? `${Math.floor(s / 60)}m` : `${s}s`;
+  return `<section class="tight"><h2>Time left</h2><div class="legend"><span><i style="background:var(--s1)"></i>You</span><span><i style="background:var(--s2)"></i>${esc(row[C.opp])}</span></div><div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Clock time left during the game"><line class="grid" x1="${m}" x2="${W - 8}" y1="${y(0)}" y2="${y(0)}"/><text x="${m - 4}" y="${y(top) + 4}" text-anchor="end">${fmt(top)}</text><text x="${m - 4}" y="${y(0) + 4}" text-anchor="end">0</text><path d="${path(mine)}" fill="none" stroke="var(--s1)" stroke-width="2"/><path d="${path(1 - mine)}" fill="none" stroke="var(--s2)" stroke-width="2"/></svg></div></section>`;
+}
+
+function trendSVG(values) {
+  if (!values || values.length < 2) return "";
+  const lo = Math.min(...values), hi = Math.max(...values), W = 90, H = 24;
+  const d = values.map((v, i) => `${i ? "L" : "M"}${(i / (values.length - 1) * W).toFixed(1)} ${(H - 3 - (v - lo) / Math.max(1, hi - lo) * (H - 6)).toFixed(1)}`).join("");
+  return `<svg class="trend" viewBox="0 0 ${W} ${H}" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`;
+}
+
+function progressSection() {
+  const rows = (data.progress || []).filter((r) => SPEEDS.includes(r.speed)).sort((a, b) => b.games - a.games);
+  if (!rows.length) return "";
+  return `<section><h2>What's holding you back</h2><p class="hint">Based on your last ${rows[0].games} rated games in each time control, weighted by how much win chance each error cost.</p><ul class="focus-list">${rows.map((r) => {
+    const change = r.previous == null ? "" : ` (${r.accuracy >= r.previous ? "up" : "down"} ${Math.abs(r.accuracy - r.previous).toFixed(1)} from the ${r.games} before)`;
+    const leak = r.leak ? `Your clearest pattern is ${r.leak_text}, ${r.leak_share}% of win chance lost.` : "";
+    const practice = r.leak ? `<a href="#/practice/${r.leak}">Practice this</a>` : "";
+    return `<li><h3>${SITE_NAMES[r.site]} ${r.speed} ${trendSVG(r.trend)}</h3><p>Accuracy ${r.accuracy}%${change}. Most lost in ${r.phase_text} (${r.phase_share}%). ${leak} ${practice}</p></li>`;
+  }).join("")}</ul></section>`;
+}
+
 let cleanup = null;
 async function route() {
   if (keyHandler) { document.removeEventListener("keydown", keyHandler); keyHandler = null; }
@@ -1121,6 +1520,9 @@ async function route() {
       await gameView(id, startPly === undefined || !/^\d+$/.test(startPly) ? null : +startPly);
     }
     else if (hash === "games") gamesView();
+    else if (hash.startsWith("practice")) await practiceView(hash.split("/")[1]);
+    else if (hash.startsWith("openings")) await openingsView(hash.split("/")[1]);
+    else if (hash.startsWith("opponent/")) opponentView(decodeURIComponent(hash.slice(9)));
     else await home();
   } catch (error) {
     app.innerHTML = `<h1>This page didn’t load</h1><p>${esc(error.message)}. Reload to try again.</p>`;

@@ -25,6 +25,8 @@ A brilliant move here is a sacrifice: the engine's top move that leaves a knight
 
 Accuracy follows the Lichess method, but on separate engine analysis, so it can differ slightly from the figure Lichess shows.
 
+The site also has practice positions from past blunders (`#/practice`, with progress saved per browser), an opening explorer, clock analysis and opponent pages.
+
 ## Setup
 
 1. Add an `OPENROUTER_API_KEY` repository secret, ideally from a key with its own spending limit.

@@ -4,7 +4,7 @@ import chess
 import pytest
 
 from tracker.__main__ import should_continue
-from tracker import analyze, book, build, champions, chesscom, lichess, motifs, review
+from tracker import analyze, book, build, champions, chesscom, insights, lichess, motifs, review
 from tracker.store import Store
 
 RAW = {
@@ -459,6 +459,50 @@ def test_unreviewable_games_are_left_off_the_site(tmp_path):
     build.build(store, {"username": "PinkRoses", "goal_rating": 1500}, tmp_path / "site")
     summary = json.loads((tmp_path / "site" / "summary.json").read_text())
     assert [row[0] for row in summary["games"]] == ["g3"] and summary["total"] == 1
+
+
+def puzzle_game(**changes):
+    game = analysed_game()
+    game["moves"] = "e4 e5 Nf3 d5 exd5 Qxd5 Nc3 Qa5 d4 exd4 Nxd4 Nf6"
+    game["analysis"]["evals"] = [0] * 13
+    game["analysis"]["moments"] = [{"ply": 9, "san": "d4", "best": "Bc4", "cat": "blunder", "before": 50, "after": -500,
+                                    "phase": "opening", "tags": ["hung_piece"], "clock": None}]
+    game["analysis"]["lines"] = {"8": "5. Bc4 Nf6 6. O-O"}
+    game.update(changes)
+    return game
+
+
+def test_puzzle_starts_before_the_error_with_the_engine_line():
+    puzzle = insights.puzzles([puzzle_game()])[0]
+    assert puzzle["id"].endswith("-9") and puzzle["played"] == "d4"
+    assert puzzle["line"] == ["Bc4", "Nf6", "O-O"]
+    assert chess.Board(puzzle["fen"]).parse_san("Bc4")
+
+
+def test_puzzles_skip_lost_positions_book_moves_bots_and_small_errors():
+    lost = puzzle_game()
+    lost["analysis"]["moments"][0]["before"] = -400
+    assert insights.puzzles([lost]) == []
+    assert insights.puzzles([puzzle_game(bot=True)]) == []
+    small = puzzle_game()
+    small["analysis"]["moments"][0].update(before=50, after=20, cat="mistake")
+    assert insights.puzzles([small]) == []
+    book_game = puzzle_game(moves="e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7")
+    assert insights.puzzles([book_game]) == []
+
+
+def test_opening_tree_counts_results_and_errors():
+    games = [puzzle_game(id=f"t{i}", at=i, result="win") for i in range(3)]
+    games[0]["analysis"]["moments"][0]["ply"] = 1
+    tree = insights.opening_tree(games)["white"]
+    assert tree["n"] == 3 and tree["c"]["e4"]["w"] == 3 and tree["c"]["e4"]["e"] == 1
+
+
+def test_comeback_needs_a_win_from_a_clearly_lost_position():
+    game = puzzle_game(result="win")
+    game["analysis"]["evals"][4] = -400
+    assert insights.comeback(game)
+    assert not insights.comeback({**game, "result": "loss"})
 
 
 def test_old_style_reviews_are_replaced(tmp_path):
