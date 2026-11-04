@@ -444,6 +444,18 @@ def test_batch_stops_at_its_spending_point_but_new_games_continue(tmp_path):
     assert {g["id"] for g in review.in_scope(store, config)} == {"g2"}
 
 
+def test_batch_stops_during_a_run_when_its_spending_point_passes(tmp_path):
+    store = make_store(tmp_path, 4)
+    for name in ("g0", "g1", "g2"):
+        store.games[name]["speed"] = "blitz"
+    config = {**CONFIG, "review_latest": 1, "max_cost_usd": 9.0, "monthly_limit_usd": 9.0,
+              "review_recent_batch": {"speed": "blitz", "count": 3, "stop_at_usd": 1.0}}
+    review.in_scope(store, config)
+    done = review.review_pending(store, config, "k", far(), FakeSession([ok(0.6), ok(0.6), ok(0.6), ok(0.6)]))
+    assert done == 2
+    assert "review" not in store.games["g1"] and "review" not in store.games["g0"]
+
+
 def test_old_style_reviews_are_replaced(tmp_path):
     store = make_store(tmp_path, 1)
     store.games["g0"]["review"] = {"summary": "old"}

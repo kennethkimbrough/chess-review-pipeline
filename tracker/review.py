@@ -358,6 +358,15 @@ def in_scope(store, config):
             or (extra and g["speed"] == extra_speed and g.get("site", "lichess") == "lichess" and g["at"] >= extra_start)]
 
 
+def in_current_scope(store, config, game):
+    batch = config.get("review_recent_batch") or {}
+    is_batch_only = (
+        game["speed"] == batch.get("speed") and game["at"] < store.state.get("review_from_at", 0)
+        and game["speed"] not in config.get("review_all_speeds", []) and game.get("site", "lichess") == "lichess"
+    )
+    return not (is_batch_only and store.state["cost_usd"] >= batch.get("stop_at_usd", float("inf")))
+
+
 def needs_review(game):
     return (game.get("review") or {}).get("v") != REVIEW_VERSION and game.get("review_failures", 0) < 6
 
@@ -399,6 +408,9 @@ def review_pending(store, config, key, deadline, session=None):
                     print(f"Reviews paused at {reason}.")
                     return
                 game = next(pending, None)
+                # The batch's stopping point can pass during a run, so skip its games from then on.
+                while game is not None and not in_current_scope(store, config, game):
+                    game = next(pending, None)
             if game is None:
                 return
             try:
