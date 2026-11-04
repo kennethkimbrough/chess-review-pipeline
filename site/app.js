@@ -244,6 +244,55 @@ const engine = {
   },
 };
 
+const opponent = {
+  worker: null, attempt: 0, timer: null, onMove: null, onFail: null, elo: 1700, last: null,
+  ask(fen, elo, onMove, onFail) {
+    this.onMove = onMove;
+    this.onFail = onFail;
+    this.last = fen;
+    this.elo = elo;
+    this.attempt = Math.max(this.attempt, engine.attempt);
+    if (!this.worker) this.boot();
+    this.send();
+  },
+  boot() {
+    this.worker = new Worker(engine.files[this.attempt]);
+    this.worker.onmessage = (event) => {
+      const line = String(event.data);
+      if (!line.startsWith("bestmove")) return;
+      clearTimeout(this.timer);
+      const uci = line.split(" ")[1];
+      if (this.onMove) this.onMove(uci);
+    };
+    this.worker.onerror = () => this.fail();
+    this.worker.postMessage("uci");
+  },
+  send() {
+    const limited = this.elo < 3000;
+    this.worker.postMessage(`setoption name UCI_LimitStrength value ${limited}`);
+    if (limited) this.worker.postMessage(`setoption name UCI_Elo value ${this.elo}`);
+    this.worker.postMessage(`position fen ${this.last}`);
+    this.worker.postMessage("go movetime 700");
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.fail(), this.attempt ? 30000 : 12000);
+  },
+  fail() {
+    clearTimeout(this.timer);
+    if (this.worker) this.worker.terminate();
+    this.worker = null;
+    this.attempt += 1;
+    if (this.attempt < engine.files.length) { this.boot(); this.send(); return; }
+    this.attempt = engine.files.length - 1;
+    if (this.onFail) this.onFail();
+  },
+  stop() {
+    clearTimeout(this.timer);
+    this.onMove = null;
+    this.onFail = null;
+    if (this.worker) this.worker.postMessage("stop");
+  },
+};
+
 function engineScore(line) {
   if (line.kind === "mate") return `${line.value > 0 ? "" : "-"}M${Math.abs(line.value)}`;
   return `${line.value > 0 ? "+" : ""}${(line.value / 100).toFixed(1)}`;
@@ -713,6 +762,8 @@ async function gameView(id, startPly) {
       <div class="controls"><button id="first" aria-label="First position">${ICONS.first}</button><button id="prev" aria-label="Previous move">${ICONS.prev}</button><button id="next" aria-label="Next move">${ICONS.next}</button><button id="last" aria-label="Last position">${ICONS.last}</button><span class="position" id="pos" aria-live="polite"></span></div>
       <div id="promote" class="promote" hidden></div>
       <div id="variation" class="variation" hidden></div>
+      <div class="play-panel"><button id="play-start">Play from here</button><label>Computer strength <select id="play-elo"><option value="1400">1400</option><option value="1700" selected>1700</option><option value="2000">2000</option><option value="2500">2500</option><option value="3000">Full strength</option></select></label></div>
+      <p class="play-status" id="play-status" aria-live="polite" hidden></p>
       <div class="engine-panel"><button id="engine-toggle" aria-pressed="false">Live engine</button><p class="note" id="engine-note">Drag or tap a piece on the board to try your own moves.</p><div id="engine-lines"></div></div>
       ${moveTable(detail, sans, row)}
     </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true, undefined, row)}${summaryHTML(detail, row)}${styleHTML(detail)}
@@ -726,6 +777,7 @@ async function gameView(id, startPly) {
   const pos = document.getElementById("pos");
   const evalNow = document.getElementById("evalnow");
   let variation = null;
+  let playing = null;
   let selected = null;
   let targets = [];
   const currentFen = () => (variation ? variation.frames[variation.index] : line ? line.frames[ply] : null);
@@ -756,7 +808,7 @@ async function gameView(id, startPly) {
     }
     const barHost = document.getElementById("evalbar");
     const cp = currentCp();
-    if (barHost && cp != null) barHost.innerHTML = evalBar(cp, flip);
+    if (barHost) barHost.innerHTML = cp == null ? "" : evalBar(cp, flip);
   };
   const paintEngine = () => {
     const box = document.getElementById("engine-lines");
@@ -813,9 +865,71 @@ async function gameView(id, startPly) {
     analyseNow();
     paintEngine();
   };
+  const canMoveNow = () => {
+    if (!playing) return true;
+    if (playing.thinking) return false;
+    const fen = currentFen();
+    return !!fen && fen.split(" ")[1] === playing.color;
+  };
+  const paintPlay = () => {
+    const box = document.getElementById("play-status");
+    const start = document.getElementById("play-start");
+    if (!box || !start) return;
+    start.textContent = playing ? "Stop playing" : "Play from here";
+    box.hidden = !playing;
+    if (!playing) { box.textContent = ""; return; }
+    const game = new Chess(currentFen());
+    const who = playing.color === "w" ? "White" : "Black";
+    if (game.in_checkmate()) box.textContent = game.turn() === playing.color ? "Checkmate. The computer won." : "Checkmate. You won!";
+    else if (game.game_over()) box.textContent = "The game is drawn.";
+    else if (playing.problem) box.textContent = "The computer couldn't start in this browser.";
+    else if (playing.thinking) box.textContent = "The computer is thinking…";
+    else box.textContent = game.turn() === playing.color ? `You're playing ${who}. Your move.` : "Step forward to the latest position to continue.";
+  };
+  const stopPlaying = () => {
+    if (!playing) return;
+    playing = null;
+    opponent.stop();
+    paintPlay();
+  };
+  const startVariation = () => {
+    if (!variation) variation = { frames: [line.frames[ply]], marks: [line.marks[ply]], sans: [], index: 0, cp: detail.evals ? detail.evals[ply] : null };
+  };
+  const addToVariation = (game, move) => {
+    variation.frames.length = variation.index + 1;
+    variation.marks.length = variation.index + 1;
+    variation.sans.length = variation.index;
+    variation.frames.push(game.fen());
+    variation.marks.push([move.from, move.to]);
+    variation.sans.push(move.san);
+    variation.index += 1;
+  };
+  const computerTurn = () => {
+    if (!playing) return;
+    const fen = currentFen();
+    if (new Chess(fen).game_over() || fen.split(" ")[1] === playing.color) { paintPlay(); return; }
+    playing.thinking = true;
+    paintPlay();
+    const session = playing;
+    opponent.ask(fen, session.elo, (uci) => {
+      if (playing !== session) return;
+      session.thinking = false;
+      const game = new Chess(currentFen());
+      const move = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+      if (move) addToVariation(game, move);
+      refresh();
+      paintPlay();
+    }, () => {
+      if (playing !== session) return;
+      session.thinking = false;
+      session.problem = true;
+      paintPlay();
+    });
+  };
   const clearSelection = () => { selected = null; targets = []; document.getElementById("promote").hidden = true; };
   const go = (next) => {
     if (!line) return;
+    stopPlaying();
     variation = null;
     clearSelection();
     ply = Math.max(0, Math.min(line.frames.length - 1, next));
@@ -834,21 +948,16 @@ async function gameView(id, startPly) {
     const move = game.move({ from, to, promotion });
     clearSelection();
     if (!move) { refresh(); return; }
-    if (!variation && ply < sans.length && bareMove(sans[ply]) === bareMove(move.san)) { go(ply + 1); return; }
-    if (!variation) variation = { frames: [line.frames[ply]], marks: [line.marks[ply]], sans: [], index: 0, cp: detail.evals ? detail.evals[ply] : null };
-    variation.frames.length = variation.index + 1;
-    variation.marks.length = variation.index + 1;
-    variation.sans.length = variation.index;
-    variation.frames.push(game.fen());
-    variation.marks.push([move.from, move.to]);
-    variation.sans.push(move.san);
-    variation.index += 1;
-    if (!engine.enabled) engine.enabled = true;
+    if (!variation && !playing && ply < sans.length && bareMove(sans[ply]) === bareMove(move.san)) { go(ply + 1); return; }
+    startVariation();
+    addToVariation(game, move);
+    if (!engine.enabled && !playing) engine.enabled = true;
     refresh();
+    computerTurn();
   };
   const onSquare = (square) => {
     const fen = currentFen();
-    if (!fen) return;
+    if (!fen || !canMoveNow()) return;
     const game = new Chess(fen);
     const target = targets.find((t) => t.to === square);
     if (selected && target) {
@@ -891,7 +1000,7 @@ async function gameView(id, startPly) {
     skipClick = false;
     const cell = event.target.closest("[data-sq]");
     const fen = currentFen();
-    if (!cell || !fen) return;
+    if (!cell || !fen || !canMoveNow()) return;
     const square = cell.dataset.sq;
     const game = new Chess(fen);
     const piece = game.get(square);
@@ -951,6 +1060,19 @@ async function gameView(id, startPly) {
     paintBoard();
     paintEngine();
   };
+  document.getElementById("play-start").onclick = () => {
+    if (playing) { stopPlaying(); refresh(); return; }
+    const fen = currentFen();
+    if (!fen) return;
+    startVariation();
+    variation.cp = null;
+    engine.enabled = false;
+    engine.stop();
+    clearSelection();
+    playing = { color: fen.split(" ")[1], elo: +document.getElementById("play-elo").value, thinking: false };
+    refresh();
+    paintPlay();
+  };
   document.getElementById("engine-toggle").onclick = () => {
     engine.enabled = !engine.enabled;
     if (!engine.enabled) engine.stop();
@@ -983,7 +1105,7 @@ async function gameView(id, startPly) {
     go(+button.dataset.ply);
     if (!button.closest("#moves")) boardHost.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
-  cleanup = () => { app.removeEventListener("click", plyClick); engine.stop(); engine.enabled = false; engine.listener = null; };
+  cleanup = () => { app.removeEventListener("click", plyClick); engine.stop(); engine.enabled = false; engine.listener = null; stopPlaying(); };
   go(ply);
 }
 
