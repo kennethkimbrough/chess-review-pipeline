@@ -499,19 +499,19 @@ function goalSection() {
   const rows = Object.keys(SITE_NAMES).flatMap((site) => {
     const series = ratingsBySpeed(site);
     return SPEEDS.filter((s) => series[s].length).map((s) => {
-    const list = series[s];
-    const last = list[list.length - 1];
-    const now = last[C.rating] + (last[C.diff] || 0);
-    const wins = list.filter((r) => r[C.result] === "win").length;
-    const gap = data.goal - now;
-    const state = gap <= 0
-      ? `<span class="goal-met">✓ reached, ${-gap} above</span>`
-      : `${gap} to go`;
-    return `<tr><td>${SITE_NAMES[site]}</td><td>${cap(s)}</td><td class="num">${now}</td><td>${state}</td><td class="num">${list.length.toLocaleString()}</td><td class="num">${Math.round(wins * 100 / list.length)}%</td></tr>`;
+      const list = series[s];
+      const last = list[list.length - 1];
+      const now = last[C.rating] + (last[C.diff] || 0);
+      const wins = list.filter((r) => r[C.result] === "win").length;
+      const gap = data.goal - now;
+      const low = data.goal - 500;
+      const width = Math.max(3, Math.min(100, (now - low) * 100 / (data.goal - low)));
+      const state = gap <= 0 ? `<span class="goal-met">✓ ${-gap} above goal</span>` : `${gap} to go`;
+      return `<li><div class="goal-top"><span>${speedIcon(s)}${SITE_NAMES[site]} ${s}</span><b>${now}</b></div><div class="goal-bar${gap <= 0 ? " met" : ""}" role="img" aria-label="${now} of ${data.goal}"><i style="width:${width}%"></i></div><div class="goal-note"><span>${state}</span><span>${list.length.toLocaleString()} rated, ${Math.round(wins * 100 / list.length)}% won</span></div></li>`;
     });
   });
   if (!rows.length) return "";
-  return `<section><h2>Road to ${data.goal}</h2><div class="table-wrap"><table class="goal-table"><thead><tr><th>Site</th><th>Time control</th><th class="num">Rating</th><th>Goal</th><th class="num">Rated games</th><th class="num">Won</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
+  return `<section><h2>Road to ${data.goal}</h2><ul class="goal-list">${rows.join("")}</ul></section>`;
 }
 
 function ratingChart(host, days, site) {
@@ -647,14 +647,19 @@ function weeklySection() {
   const common = Object.entries(tags).sort((a, b) => b[1] - a[1])[0];
   const wins = week.filter((r) => r[C.result] === "win" && r[C.acc] != null && r[C.plies] >= 20);
   const best = wins.sort((a, b) => b[C.acc] - a[C.acc])[0];
-  const items = [
-    `<li><b>${plural(week.length, "game")}:</b> ${count("win")} wins, ${count("draw")} draws, ${count("loss")} losses.</li>`,
-    accuracy != null ? `<li><b>Accuracy:</b> ${accuracy.toFixed(1)}%${change}.</li>` : "",
-    ratingText ? `<li><b>Rating change:</b> ${esc(ratingText)}.</li>` : "",
-    common ? `<li><b>Most common pattern:</b> ${PATTERN_TEXT[common[0]]} (${common[1]} ${common[1] === 1 ? "time" : "times"}). <a href="#/practice/${common[0]}">Practice this</a></li>` : "",
-    best ? `<li><b>Best win:</b> <a href="#/game/${best[C.id]}">${esc(best[C.opp])}</a>, ${Math.round(best[C.acc])}% accuracy.</li>` : "",
+  const tile = (value, label, tone) => `<div class="stat"><b${tone ? ` class="${tone}"` : ""}>${value}</b><span>${label}</span></div>`;
+  const delta = accuracy != null && earlier != null ? `${accuracy >= earlier ? "▲" : "▼"} ${Math.abs(accuracy - earlier).toFixed(1)} vs last week` : "Accuracy";
+  const net = Object.values(ratings).reduce((sum, v) => sum + v, 0);
+  const tiles = tile(week.length, plural(week.length, "game").split(" ")[1])
+    + tile(`${count("win")}-${count("draw")}-${count("loss")}`, "Won, drawn, lost")
+    + (accuracy != null ? tile(`${accuracy.toFixed(0)}%`, delta) : "")
+    + (ratingText ? tile(`${net > 0 ? "+" : ""}${net}`, "Rating", net >= 0 ? "res win" : "res loss") : "");
+  const notes = [
+    ratingText ? `<li>${esc(ratingText)}</li>` : "",
+    common ? `<li>Most common pattern: ${PATTERN_TEXT[common[0]]} (${common[1]} ${common[1] === 1 ? "time" : "times"}). <a href="#/practice/${common[0]}">Practice this</a></li>` : "",
+    best ? `<li>Best win: <a href="#/game/${best[C.id]}">${esc(best[C.opp])}</a>, ${Math.round(best[C.acc])}% accuracy</li>` : "",
   ].join("");
-  return `<section class="tight"><h2>This week</h2><ul class="week-list">${items}</ul><p><a class="button-link" href="#/practice/week">Practice this week's blunders</a></p></section>`;
+  return `<section class="tight"><h2>This week</h2><div class="stats">${tiles}</div><ul class="week-list">${notes}</ul><p><a class="button-link" href="#/practice/week">Practice this week's blunders</a></p></section>`;
 }
 
 const OVERVIEW_TABS = { summary: "Summary", progress: "Progress", openings: "Openings", style: "Style" };
@@ -800,12 +805,18 @@ function moveTable(detail, sans, row) {
 
 function evalGraph(detail, row, ply) {
   if (!detail.evals) return "";
-  const n = detail.evals.length - 1, W = 600, H = 90;
-  const sign = row[C.color] === "w" ? 1 : -1;
-  const y = (cp) => H / 2 - Math.max(-600, Math.min(600, cp * sign)) / 600 * (H / 2 - 2);
+  const n = detail.evals.length - 1, W = 600, H = 100;
+  const white = row[C.color] === "w";
+  const sign = white ? 1 : -1;
+  const y = (cp) => (100 - winPercent(cp * sign)) / 100 * H;
   const x = (i) => i / Math.max(1, n) * W;
-  const area = `M0 ${H / 2}` + detail.evals.map((e, i) => `L${x(i).toFixed(1)} ${y(e).toFixed(1)}`).join("") + `L${W} ${H / 2}Z`;
-  return `<svg class="eval" id="eval" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Evaluation through the game from your side. Above the line favours you."><path class="area" d="${area}"/><line class="mid" x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" vector-effect="non-scaling-stroke"/><line class="now" id="evalnow" x1="${x(ply)}" x2="${x(ply)}" y1="0" y2="${H}" vector-effect="non-scaling-stroke"/></svg>`;
+  const area = `M0 ${H}` + detail.evals.map((e, i) => `L${x(i).toFixed(1)} ${y(e).toFixed(1)}`).join("") + `L${W} ${H}Z`;
+  const notes = annotations(detail, row);
+  const dots = Object.entries(notes).filter(([, c]) => ["blunder", "mistake", "miss", "great", "brilliant"].includes(c)).map(([p, c]) => {
+    const i = +p;
+    return `<span class="eval-dot cat-${c}" style="left:${(x(i) / W * 100).toFixed(2)}%;top:${(y(detail.evals[i]) / H * 100).toFixed(2)}%"></span>`;
+  }).join("");
+  return `<div class="eval-wrap${white ? " you-white" : " you-black"}"><svg class="eval" id="eval" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Evaluation through the game. Your side is the lower fill; a higher line favours you."><path class="area" d="${area}"/><line class="mid" x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" vector-effect="non-scaling-stroke"/><line class="now" id="evalnow" x1="${x(ply)}" x2="${x(ply)}" y1="0" y2="${H}" vector-effect="non-scaling-stroke"/></svg>${dots}</div>`;
 }
 
 async function gameView(id, startPly) {
@@ -829,7 +840,7 @@ async function gameView(id, startPly) {
   const others = moments.filter((m) => !reviewed.has(m.ply) && m.cat !== "inaccuracy");
   app.innerHTML = `<div class="game-head"><div>
       ${evalGraph(detail, row, ply)}
-      ${playerBar(row, false)}<div class="board-row"><div class="bar-slot" id="evalbar"></div><div class="board-slot" id="board"></div></div>${playerBar(row, true)}
+      ${playerBar(row, false)}<div class="board-sticky"><div class="board-row"><div class="bar-slot" id="evalbar"></div><div class="board-slot" id="board"></div></div></div>${playerBar(row, true)}
       <div class="controls"><button id="first" aria-label="First position">${ICONS.first}</button><button id="prev" aria-label="Previous move">${ICONS.prev}</button><button id="next" aria-label="Next move">${ICONS.next}</button><button id="last" aria-label="Last position">${ICONS.last}</button><span class="position" id="pos" aria-live="polite"></span></div>
       <div id="promote" class="promote" hidden></div>
       <div id="variation" class="variation" hidden></div>
@@ -1295,7 +1306,7 @@ async function practiceView(themeArg) {
   app.innerHTML = `<h1 class="page-title">Practice your mistakes</h1>
     <p class="hint">Each position comes from one of your own games, right before a blunder. Find the better move. Positions you miss come back sooner. Your progress is saved in this browser.</p>
     <div class="filters"><select id="theme" aria-label="Theme">${Object.keys(THEME_NAMES).filter((k) => counts[k]).map((k) => `<option value="${k}" ${k === theme ? "selected" : ""}>${THEME_NAMES[k]} (${counts[k].toLocaleString()})</option>`).join("")}</select></div>
-    <p class="meta" id="practice-stats"></p>
+    <div id="practice-stats"></div>
     <div class="game-head"><div><div class="board-slot" id="pz-board"></div></div><div>
       <h2 id="pz-title"></h2><p class="meta" id="pz-meta"></p><p id="pz-message" aria-live="polite"></p>
       <div class="controls" id="pz-actions"></div><div class="controls" id="pz-steps" hidden><button id="pz-prev" aria-label="Previous move">${ICONS.prev}</button><button id="pz-next" aria-label="Next move">${ICONS.next}</button><span class="position" id="pz-pos"></span></div>
@@ -1313,7 +1324,8 @@ async function practiceView(themeArg) {
     const seen = Object.keys(state.items).length;
     const due = Object.values(state.items).filter((i) => i.due <= Date.now()).length;
     const rate = state.attempts ? Math.round(state.solved * 100 / state.attempts) : 0;
-    document.getElementById("practice-stats").textContent = `${seen.toLocaleString()} tried, ${rate}% solved first try, streak ${state.streak} (best ${state.best}), ${due} due for review.`;
+    const tile = (value, label) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
+    document.getElementById("practice-stats").innerHTML = `<div class="stats">${tile(state.streak, `Streak, best ${state.best}`)}${tile(`${rate}%`, "First try")}${tile(seen.toLocaleString(), "Tried")}${tile(due, "Due")}</div>`;
   };
   const paint = (note) => {
     const fen = stage === "solve" ? puzzle.fen : frames[index];
@@ -1337,6 +1349,12 @@ async function practiceView(themeArg) {
     state.items[puzzle.id] = item;
     savePractice(state);
     paintStats();
+  };
+  const flash = (good) => {
+    message.className = good ? "pz-good" : "pz-bad";
+    host.classList.remove("flash-good", "flash-bad");
+    void host.offsetWidth;
+    host.classList.add(good ? "flash-good" : "flash-bad");
   };
   const reveal = (text) => {
     stage = "done";
@@ -1364,11 +1382,13 @@ async function practiceView(themeArg) {
   };
   const finishMiss = () => {
     record(false);
+    flash(false);
     const drop = `${pawns(puzzle.before)} to ${pawns(puzzle.after)}`;
     reveal(`The move was ${puzzle.line[0]}. In the game you played ${puzzle.played}, going from ${drop}. This one comes back soon.`);
   };
   const correct = (text) => {
     if (firstTry) record(true); else record(false);
+    flash(true);
     const drop = `${pawns(puzzle.before)} to ${pawns(puzzle.after)}`;
     reveal(`${text} In the game you played ${puzzle.played}, going from ${drop}.`);
   };
@@ -1402,6 +1422,7 @@ async function practiceView(themeArg) {
     firstTry = false;
     attemptMark = null;
     paint(null);
+    flash(false);
     message.textContent = score == null ? `Not the engine's move. Try again.` : `${move.san} isn't good enough${score != null ? ` (${pawns(score * mine)})` : ""}. Try again.`;
   };
   const checkMove = async (fen) => {
@@ -1438,6 +1459,8 @@ async function practiceView(themeArg) {
     flip = puzzle.fen.split(" ")[1] === "b";
     title.textContent = `${puzzle.fen.split(" ")[1] === "w" ? "White" : "Black"} to move`;
     meta.textContent = `${cap(puzzle.speed)} vs ${puzzle.opp}, ${dateText(puzzle.at)}. You're at ${pawns(puzzle.before)}.${puzzle.tags.length ? ` Theme: ${puzzle.tags.map((t) => THEME_NAMES[t] || t).join(", ")}.` : ""}`;
+    message.className = "";
+    host.classList.remove("flash-good", "flash-bad");
     message.textContent = "Find the best move.";
     actions.innerHTML = '<button id="pz-show">Show solution</button><button id="pz-skip">Skip</button>';
     document.getElementById("pz-show").onclick = finishMiss;
@@ -1500,10 +1523,28 @@ async function openingsView(arg) {
   draw();
 }
 
+const SPEED_ICONS = {
+  bullet: "M4 12c0-3 3-5 7-5h2l7 5-7 5h-2c-4 0-7-2-7-5z",
+  blitz: "M13 2 5 14h6l-1 8 9-13h-6z",
+  rapid: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm1 4v5.4l4 2.4-1 1.6-5-3V7z",
+  classical: "M7 3h10v2l-4 6 4 6v2H7v-2l4-6-4-6z",
+};
+function speedIcon(speed) {
+  const d = SPEED_ICONS[speed] || SPEED_ICONS.rapid;
+  return `<svg class="speed-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+}
+
 function gameRow(r) {
-  const errs = r[C.blunders] == null ? "" : `, ${plural(r[C.blunders], "blunder")}`;
-  const acc = r[C.acc] == null ? "" : `${Math.round(r[C.acc])}%`;
-  return `<li><a href="#/game/${r[C.id]}"><span class="res ${r[C.result]}">${resultWord[r[C.result]]}</span><span class="opp">${esc(r[C.opp])}${r[C.oppRating] ? ` (${r[C.oppRating]})` : ""}</span><span class="acc">${acc}</span><span class="dt">${new Date(r[C.at]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })}</span><span class="sub">${SITE_NAMES[r[C.site]]}, ${cap(r[C.speed])}${r[C.bot] ? ", bot" : ""}, ${esc(r[C.family])}${errs}${r[C.sacrifices] ? `, ${plural(r[C.sacrifices], "brilliant move")}` : ""}${r[C.great] ? `, ${plural(r[C.great], "great move")}` : ""}${r[C.reviewed] ? ", reviewed" : ""}</span></a></li>`;
+  const acc = r[C.acc];
+  const bar = acc == null ? "" : `<span class="acc-bar" aria-hidden="true"><i style="width:${Math.max(2, Math.min(100, acc))}%"></i></span>`;
+  const chips = [
+    r[C.blunders] ? plural(r[C.blunders], "blunder") : "",
+    r[C.sacrifices] ? `<b class="tone-brilliant">${r[C.sacrifices]} !!</b>` : "",
+    r[C.great] ? `<b class="tone-great">${r[C.great]} !</b>` : "",
+    r[C.reviewed] ? "reviewed" : "",
+    r[C.bot] ? "bot" : "",
+  ].filter(Boolean).join(", ");
+  return `<li><a class="game-card result-${r[C.result]}" href="#/game/${r[C.id]}"><span class="res ${r[C.result]}">${resultWord[r[C.result]]}</span><span class="opp">${esc(r[C.opp])}${r[C.oppRating] ? ` <small>${r[C.oppRating]}</small>` : ""}</span><span class="acc-box">${acc == null ? "" : `${Math.round(acc)}%`}${bar}</span><span class="dt">${new Date(r[C.at]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })}</span><span class="sub">${speedIcon(r[C.speed])}${SITE_NAMES[r[C.site]]}, ${esc(r[C.family])}${chips ? `<br>${chips}` : ""}</span></a></li>`;
 }
 
 function opponentView(name) {
