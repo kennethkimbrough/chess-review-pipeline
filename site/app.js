@@ -111,14 +111,58 @@ function styleHTML(detail) {
   const [first, ...rest] = style.top;
   const also = rest.map(([name, share]) => `${esc(name)} (${Math.round(share * 100)}%)`).join(", ");
   const why = style.why && style.why.length ? `<p>Shared traits: ${esc(style.why.join(", "))}.</p>` : "";
-  return `<section class="tight"><h2>Played most like</h2><p class="headline">${esc(first[0])} (${Math.round(first[1] * 100)}%)</p>${why}${also ? `<p class="meta">Next closest: ${also}</p>` : ""}<p class="note">A rough, for-fun comparison of move patterns, such as captures, king pressure and pawn play. It says nothing about strength, one game is a small sample, and fast online games tend to lean toward the sharper, older champions. Compares 16 of the 18 undisputed champions: Ding Liren and Gukesh Dommaraju aren't in the data yet.</p></section>`;
+  return `<section class="tight"><h2>World champion most like this game</h2><p class="headline">${esc(first[0])} (${Math.round(first[1] * 100)}%)</p>${why}${also ? `<p class="meta">Next closest: ${also}</p>` : ""}<p class="note">A rough, for-fun comparison of move patterns, such as captures, king pressure and pawn play. It says nothing about strength, one game is a small sample, and fast online games tend to lean toward the sharper, older champions. Compares 16 of the 18 undisputed champions: Ding Liren and Gukesh Dommaraju aren't in the data yet.</p></section>`;
 }
 
 function styleSection() {
+  const overall = data.style_overall;
+  if (!overall) return "";
+  const [first, ...rest] = overall.top;
   const counts = data.style_counts || [];
-  if (!counts.length) return "";
   const total = counts.reduce((sum, item) => sum + item[1], 0);
-  return `<section><h2>Champions you play most like</h2><p class="hint">How often each champion was the closest match across your ${total.toLocaleString()} human games. It's a rough comparison of move patterns, not strength.</p><div class="table-wrap"><table><thead><tr><th>Champion</th><th class="num">Games</th><th class="num">Share</th></tr></thead><tbody>${counts.slice(0, 6).map(([name, n]) => `<tr><td>${esc(name)}</td><td class="num">${n.toLocaleString()}</td><td class="num">${Math.round(n * 100 / total)}%</td></tr>`).join("")}</tbody></table></div></section>`;
+  const why = overall.why.length ? `<p>Shared traits: ${esc(overall.why.join(", "))}.</p>` : "";
+  const table = counts.length ? `<h3 class="sub-head">Closest match game by game</h3><div class="table-wrap"><table><thead><tr><th>Champion</th><th class="num">Games</th><th class="num">Share</th></tr></thead><tbody>${counts.slice(0, 6).map(([name, n]) => `<tr><td>${esc(name)}</td><td class="num">${n.toLocaleString()}</td><td class="num">${Math.round(n * 100 / total)}%</td></tr>`).join("")}</tbody></table></div>` : "";
+  return `<section><h2>World champion you play most like</h2><p class="headline">${esc(first[0])}</p>${why}<p class="meta">Next closest: ${rest.map(([name]) => esc(name)).join(", ")}</p><p class="hint">Based on the average of your ${overall.games.toLocaleString()} human games. It's a rough comparison of move patterns, not strength.</p>${table}</section>`;
+}
+
+function nextCheck() {
+  const next = new Date();
+  next.setUTCMinutes(17, 0, 0);
+  next.setUTCHours(next.getUTCHours() + (next.getUTCHours() % 2 ? 1 : 0));
+  if (next <= new Date()) next.setUTCHours(next.getUTCHours() + 2);
+  return next;
+}
+
+function timeWords(ms) {
+  const minutes = Math.max(1, Math.round(ms / 60000));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return minutes % 60 ? `${hours} hr ${minutes % 60} min` : `${hours} hr`;
+  return `${Math.round(hours / 24)} days`;
+}
+
+function refreshLine() {
+  const updated = data.updated_at ? `Last published ${timeWords(Date.now() - data.updated_at)} ago. ` : "";
+  return `${updated}Next check for new games in about ${timeWords(nextCheck() - Date.now())}, though GitHub can run it late.`;
+}
+
+function showRefresh() {
+  const line = document.getElementById("refresh");
+  if (line && data) line.textContent = refreshLine();
+}
+setInterval(showRefresh, 30000);
+
+function evalBar(cp, flip) {
+  const whiteShare = winPercent(cp);
+  const value = Math.abs(cp) >= 1000 ? "M" : (Math.abs(cp) / 100).toFixed(1);
+  const whiteAhead = cp >= 0;
+  const onBottom = whiteAhead !== flip;
+  const fill = flip ? `top:0;height:${whiteShare}%` : `bottom:0;height:${whiteShare}%`;
+  return `<div class="evalbar" role="img" aria-label="Evaluation ${cp >= 0 ? "White" : "Black"} ${value}"><div class="white-fill" style="${fill}"></div><span class="val ${onBottom ? "low" : "high"} ${whiteAhead ? "on-white" : "on-black"}">${value}</span></div>`;
+}
+
+function boardRow(boardMarkup, cp, flip) {
+  return `<div class="board-row"><div class="bar-slot">${cp == null ? "" : evalBar(cp, flip)}</div><div class="board-slot">${boardMarkup}</div></div>`;
 }
 
 const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
@@ -381,7 +425,7 @@ async function latestReview() {
     let ply = (detail.moments || []).reduce((best, m) => (!best || m.before - m.after > best.before - best.after ? m : best), null);
     ply = ply ? ply.ply : (line ? line.frames.length - 1 : 0);
     const board = line ? boardHTML(line.frames[ply], row[C.color] === "b", line.marks[ply], `Board after ${moveLabel(ply)}`, annotations(detail, row)[ply]) : "";
-    return `<div class="game-head"><div>${playerBar(row, false)}${board}${playerBar(row, true)}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
+    return `<div class="game-head"><div>${playerBar(row, false)}${boardRow(board, detail.evals ? detail.evals[ply] : null, row[C.color] === "b")}${playerBar(row, true)}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
       <div>${headline(row)}<p class="meta">${metaLine(row)}</p>${reviewHTML(detail, false, row[C.id])}<p><a href="#/game/${row[C.id]}">Replay this game</a></p></div></div>`;
   }
   return `<h1 style="font-size:clamp(1.5rem,3vw,2rem);margin-top:12px">Your reviews will appear here</h1><p class="hint">${data.total.toLocaleString()} games collected and ${data.analysed.toLocaleString()} analysed so far. Reviews are written as analysis finishes.</p>`;
@@ -390,7 +434,7 @@ async function latestReview() {
 async function home() {
   setNav("home");
   const lead = await latestReview();
-  app.innerHTML = lead + goalSection() + chartSection() + styleSection() + mistakesSection() + openingsSection();
+  app.innerHTML = lead + styleSection() + goalSection() + chartSection() + mistakesSection() + openingsSection();
   const host = document.getElementById("chart");
   let days = 0, site = "lichess";
   ratingChart(host, days, site);
@@ -426,7 +470,7 @@ function sortGames(list) {
 function gamesView() {
   setNav("games");
   app.innerHTML = `<h1 style="font-size:clamp(1.5rem,3vw,2rem);margin-top:12px">Games</h1>
-  <p class="hint" id="count"></p>
+  <p class="hint" id="count"></p><p class="hint" id="refresh"></p>
   <div class="filters">
     <input id="q" type="search" placeholder="Search opponent or opening" aria-label="Search opponent or opening" value="${esc(listState.q)}">
     <select id="sort" aria-label="Sort games">${Object.entries(SORTS).map(([k, v]) => `<option value="${k}" ${listState.sort === k ? "selected" : ""}>${v}</option>`).join("")}</select>
@@ -454,6 +498,7 @@ function gamesView() {
     }).join("") || '<li class="note">No games match. Clear a filter to see more.</li>';
     document.getElementById("more").hidden = list.length <= listState.shown;
   };
+  showRefresh();
   const reset = (key) => (event) => { listState[key] = event.target.value; listState.shown = 50; draw(); };
   document.getElementById("q").addEventListener("input", reset("q"));
   document.getElementById("sort").addEventListener("change", reset("sort"));
@@ -522,9 +567,9 @@ async function gameView(id, startPly) {
   const reviewed = new Set(((detail.review && detail.review.moments) || []).map((m) => m.ply));
   const others = moments.filter((m) => !reviewed.has(m.ply) && m.cat !== "inaccuracy");
   app.innerHTML = `<div class="game-head"><div>
-      ${playerBar(row, false)}<div id="board"></div>${playerBar(row, true)}
-      <div class="controls"><button id="first" aria-label="First position">${ICONS.first}</button><button id="prev" aria-label="Previous move">${ICONS.prev}</button><button id="next" aria-label="Next move">${ICONS.next}</button><button id="last" aria-label="Last position">${ICONS.last}</button><span class="position" id="pos" aria-live="polite"></span></div>
       ${evalGraph(detail, row, ply)}
+      ${playerBar(row, false)}<div class="board-row"><div class="bar-slot" id="evalbar"></div><div class="board-slot" id="board"></div></div>${playerBar(row, true)}
+      <div class="controls"><button id="first" aria-label="First position">${ICONS.first}</button><button id="prev" aria-label="Previous move">${ICONS.prev}</button><button id="next" aria-label="Next move">${ICONS.next}</button><button id="last" aria-label="Last position">${ICONS.last}</button><span class="position" id="pos" aria-live="polite"></span></div>
       ${moveTable(detail, sans, row)}
     </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true)}${summaryHTML(detail, row)}${styleHTML(detail)}
       ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
@@ -540,6 +585,8 @@ async function gameView(id, startPly) {
     if (!line) return;
     ply = Math.max(0, Math.min(line.frames.length - 1, next));
     boardHost.innerHTML = boardHTML(line.frames[ply], flip, line.marks[ply], ply ? `Board after ${moveLabel(ply)} ${sans[ply - 1]}` : "Starting position", notes[ply]);
+    const barHost = document.getElementById("evalbar");
+    if (barHost && detail.evals) barHost.innerHTML = evalBar(detail.evals[ply], flip);
     pos.textContent = ply ? `${moveLabel(ply)} ${sans[ply - 1]}` : "Start";
     document.querySelectorAll("#moves button").forEach((b) => {
       const current = +b.dataset.ply === ply;
@@ -574,7 +621,7 @@ async function gameView(id, startPly) {
     const button = event.target.closest("[data-ply]");
     if (!button) return;
     go(+button.dataset.ply);
-    boardHost.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (!button.closest("#moves")) boardHost.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
   cleanup = () => app.removeEventListener("click", plyClick);
   go(ply);

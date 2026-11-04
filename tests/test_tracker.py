@@ -400,6 +400,8 @@ def test_matcher_returns_three_shares_and_only_real_champions():
     assert len(names) == 3 and all(n in champions.Matcher().profiles for n in names)
     assert match["top"][0][1] >= match["top"][1][1]
     assert champions.Matcher().match({"moves": "e4 e5", "color": "white"}) is None
+    overall = champions.Matcher().overall_match([{"style": match}, {"style": None}])
+    assert overall["games"] == 1 and len(overall["top"]) == 3
 
 
 def test_old_style_reviews_are_replaced(tmp_path):
