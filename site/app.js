@@ -888,6 +888,7 @@ async function gameView(id, startPly) {
   };
   boardHost.addEventListener("pointerdown", (event) => {
     if (event.button) return;
+    skipClick = false;
     const cell = event.target.closest("[data-sq]");
     const fen = currentFen();
     if (!cell || !fen) return;
@@ -923,6 +924,8 @@ async function gameView(id, startPly) {
     if (!drag) return;
     const { moved, wasSelected, from } = drag;
     endDrag();
+    // A click may or may not follow, because the pressed square gets redrawn.
+    setTimeout(() => { skipClick = false; }, 0);
     if (!moved) {
       if (wasSelected) { clearSelection(); paintBoard(); }
       return;
@@ -932,7 +935,7 @@ async function gameView(id, startPly) {
     if (cell && cell.dataset.sq !== from && targets.some((t) => t.to === cell.dataset.sq)) onSquare(cell.dataset.sq);
     else { clearSelection(); paintBoard(); }
   });
-  boardHost.addEventListener("pointercancel", () => { endDrag(); clearSelection(); paintBoard(); });
+  boardHost.addEventListener("pointercancel", () => { skipClick = false; endDrag(); clearSelection(); paintBoard(); });
   boardHost.addEventListener("click", (event) => {
     if (skipClick) { skipClick = false; return; }
     const cell = event.target.closest("[data-sq]");
