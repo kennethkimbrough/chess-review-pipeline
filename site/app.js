@@ -308,7 +308,7 @@ function boardHTML(fen, flip, mark, label, note) {
     const name = "abcdefgh"[file] + (8 - rank);
     const shade = (file + rank) % 2 ? "d" : "l";
     const hi = mark && mark.includes(name) ? " hi" : "";
-    let inner = piece ? `<span class="pc ${piece === piece.toUpperCase() ? "w" : "b"}">${GLYPH[piece.toLowerCase()]}︎</span>` : "";
+    let inner = piece ? `<img class="pc" src="vendor/pieces/${piece === piece.toUpperCase() ? "w" : "b"}${piece.toUpperCase()}.svg" alt="" draggable="false">` : "";
     if (note && NOTE[note] && mark && mark[1] === name) {
       inner += `<span class="badge cat-${note}" title="${CATEGORY_NAME[note]}" aria-label="${CATEGORY_NAME[note]}">${NOTE[note]}</span>`;
     }
