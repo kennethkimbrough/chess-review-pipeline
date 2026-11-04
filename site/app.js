@@ -274,7 +274,7 @@ async function home() {
 }
 
 const listState = { site: "", speed: "", result: "", q: "", sort: "newest", shown: 50 };
-const SORTS = { newest: "Newest first", oldest: "Oldest first", best: "Highest accuracy", worst: "Lowest accuracy", sacrifices: "Most sacrifices" };
+const SORTS = { newest: "Newest first", oldest: "Oldest first", best: "Highest accuracy", worst: "Lowest accuracy", opponentHigh: "Highest-rated opponent", opponentLow: "Lowest-rated opponent", sacrifices: "Most sacrifices" };
 function sortGames(list) {
   // Very short games can score 100%, so they rank after full games.
   const acc = (r, missing) => (r[C.acc] == null || r[C.plies] < 20 ? missing : r[C.acc]);
@@ -284,6 +284,8 @@ function sortGames(list) {
     oldest: (a, b) => a[C.at] - b[C.at],
     best: (a, b) => acc(b, -1) - acc(a, -1) || byDate(a, b),
     worst: (a, b) => acc(a, 101) - acc(b, 101) || byDate(a, b),
+    opponentHigh: (a, b) => (b[C.oppRating] ?? -1) - (a[C.oppRating] ?? -1) || byDate(a, b),
+    opponentLow: (a, b) => (a[C.oppRating] ?? 1e6) - (b[C.oppRating] ?? 1e6) || byDate(a, b),
     sacrifices: (a, b) => b[C.sacrifices] - a[C.sacrifices] || byDate(a, b),
   };
   return list.sort(orders[listState.sort]);
