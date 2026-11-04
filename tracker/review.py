@@ -310,14 +310,16 @@ def request_review(game, config, key, session, model=None, reasoning=None):
 def in_scope(store, config):
     """Games from the latest N onward. The starting point is fixed the first time this runs."""
     games = [g for g in store.newest_first() if len(g.get("moves", "").split()) >= 4
-             and g.get("variant", "standard") in ("standard", "fromPosition", "chess960")]
-    if "review_from_at" not in store.state and games:
-        index = min(config["review_latest"], len(games)) - 1
-        store.state["review_from_at"] = games[index]["at"]
+             and g.get("variant", "standard") in ("standard", "fromPosition", "chess960") and not g.get("bot")
+             and (g.get("site", "lichess") == "lichess" or config.get("chesscom_reviews_enabled"))]
+    lichess_games = [g for g in games if g.get("site", "lichess") == "lichess"]
+    if "review_from_at" not in store.state and lichess_games:
+        index = min(config["review_latest"], len(lichess_games)) - 1
+        store.state["review_from_at"] = lichess_games[index]["at"]
         store.state_changed = True
     start = store.state.get("review_from_at", float("inf"))
     speeds = set(config.get("review_all_speeds", []))
-    return [g for g in games if g["at"] >= start or g["speed"] in speeds]
+    return [g for g in games if g["at"] >= start or g["speed"] in speeds or g.get("site") == "chesscom"]
 
 
 def needs_review(game):

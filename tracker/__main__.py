@@ -5,7 +5,7 @@ import os
 import time
 from pathlib import Path
 
-from . import analyze, build, lichess, review
+from . import analyze, build, chesscom, lichess, review
 from .store import Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -59,6 +59,7 @@ def main():
     start = time.time()
     deadline = start + args.minutes * 60
     added = lichess.fetch_new(store, config["username"], deadline)
+    added += chesscom.fetch_new(store, config)
     refreshed = analyze.refresh_accuracy(store)
     if refreshed:
         print(f"Refreshed accuracy for {refreshed} games")

@@ -1,6 +1,6 @@
 # pinkroses-lichess
 
-Tracks every Lichess game played by [PinkRoses](https://lichess.org/@/PinkRoses), checks each one with Stockfish, and publishes a written review of it, along with rating trends and recurring mistakes, as a GitHub Pages site.
+Tracks every game played by [PinkRoses](https://lichess.org/@/PinkRoses) on Lichess and [Qqisking](https://www.chess.com/member/qqisking) on Chess.com, checks each one with Stockfish, and publishes a written review of it, along with rating trends and recurring mistakes, as a GitHub Pages site.
 
 **Live site:** https://kennethkimbrough.github.io/pinkroses-lichess/
 
@@ -8,9 +8,9 @@ Tracks every Lichess game played by [PinkRoses](https://lichess.org/@/PinkRoses)
 
 Every two hours a GitHub Action:
 
-1. Downloads new games from the public Lichess API.
+1. Downloads new games from the public Lichess and Chess.com APIs.
 2. Runs Stockfish 17.1 on each position (100,000 nodes) to find mistakes, blunders and the moves the engine preferred.
-3. Sends the annotated game to `google/gemini-3.7-flash` through OpenRouter for a review of how the game unfolded. A review is rejected and retried if it cites a move that isn't in the game or an engine line, or names a pin, skewer, fork, discovered attack or back-rank tactic the board doesn't show. Reviews cover the latest 50 games at setup, every game after them, and all rapid and classical games.
+3. Sends the annotated game to `google/gemini-3.7-flash` through OpenRouter for a review of how the game unfolded. A review is rejected and retried if it cites a move that isn't in the game or an engine line, or names a pin, skewer, fork, discovered attack or back-rank tactic the board doesn't show. Reviews cover the latest 50 games at setup, every game after them, all rapid and classical games, and all human Chess.com games. Bot games are analysed but not reviewed or counted in stats.
 4. Commits the results to `data/` and publishes the site from `site/`.
 
 While work remains, each productive run queues the next one, so backlogs don't depend on the schedule. A run with no new games changes nothing and costs nothing. Older games are analysed newest first across runs and count toward the stats. If the repo has been quiet for 50 days, a small commit keeps the schedule from being disabled.
@@ -36,6 +36,8 @@ All of these are in `config.json`:
 | `monthly_limit_overrides` | A different limit for a named month, such as `2026-11`. |
 | `max_cost_usd` | Stops reviews once total tracked spending reaches this amount. |
 | `reasoning` | Extra model reasoning: `off`, `low`, `medium` or `high`. |
+| `chesscom_reviews_enabled` | Turns reviews on for human Chess.com games. |
+| `chesscom_bots`, `chesscom_humans` | Opponent names to force as bots or humans. |
 | `model` | Any OpenRouter model id. |
 | `engine_nodes` | Stockfish search size per position. |
 | `goal_rating` | The target shown on the site. |

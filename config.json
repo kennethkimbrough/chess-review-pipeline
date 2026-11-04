@@ -26,5 +26,9 @@
   ],
   "monthly_limit_overrides": {
     "2026-11": 7.5
-  }
+  },
+  "chesscom_username": "Qqisking",
+  "chesscom_reviews_enabled": false,
+  "chesscom_bots": [],
+  "chesscom_humans": []
 }
