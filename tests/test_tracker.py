@@ -227,6 +227,20 @@ def test_reviews_cover_latest_games_then_every_new_game(tmp_path):
     assert "review" in store.games["g9"] and "review" not in store.games["g2"]
 
 
+def test_chosen_speeds_are_reviewed_across_the_full_history(tmp_path):
+    store = make_store(tmp_path, 3)
+    store.games["g0"]["speed"] = "rapid"
+    config = {**CONFIG, "review_latest": 1, "review_all_speeds": ["rapid"]}
+    assert review.review_pending(store, config, "k", far(), FakeSession([ok(), ok()])) == 2
+    assert "review" in store.games["g0"] and "review" in store.games["g2"] and "review" not in store.games["g1"]
+
+
+def test_monthly_override_applies_only_to_its_month(tmp_path):
+    store = make_store(tmp_path, 2)
+    config = {**CONFIG, "review_latest": 2, "monthly_limit_usd": 0.5, "monthly_limit_overrides": {review.month_key(): 5.0}}
+    assert review.review_pending(store, config, "k", far(), FakeSession([ok(0.6), ok(0.6)])) == 2
+
+
 def test_old_style_reviews_are_replaced(tmp_path):
     store = make_store(tmp_path, 1)
     store.games["g0"]["review"] = {"summary": "old"}

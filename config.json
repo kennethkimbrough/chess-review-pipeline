@@ -19,5 +19,12 @@
   "test_settings": [
     "off",
     "low"
-  ]
+  ],
+  "review_all_speeds": [
+    "rapid",
+    "classical"
+  ],
+  "monthly_limit_overrides": {
+    "2026-11": 7.5
+  }
 }
