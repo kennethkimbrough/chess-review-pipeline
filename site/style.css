@@ -77,6 +77,11 @@ section { margin-top: 44px; }
 .play-panel { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 0; }
 .play-status { margin: 8px 0; font-weight: 700; }
 .play-status[hidden] { display: none; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; margin: 8px 0 16px; border-bottom: 1px solid var(--line); }
+.tabs button { flex: 0 0 auto; background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--soft); padding: 10px 12px; }
+.tabs button[aria-selected="true"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--accent); }
+.week-list { list-style: none; margin: 0 0 10px; padding: 0; }
+.week-list li { padding: 6px 0; }
 .page-title { font-size: clamp(1.5rem, 3vw, 2rem); margin: 12px 0 8px; }
 .button-link { display: inline-flex; align-items: center; min-height: 44px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); text-decoration: none; }
 a.plain { color: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }

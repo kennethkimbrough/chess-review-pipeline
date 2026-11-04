@@ -107,6 +107,7 @@ def build(store, config, out):
         "recent_size": len(recent),
         "openings": opening_rows([g for g in games if g["result"] and not g.get("bot")]),
         "chesscom_username": config.get("chesscom_username"),
+        "recent_tags": insights.recent_tags(games),
         "progress": insights.progress(games),
         "clock_stats": insights.clock_stats(games),
         "updated_at": int(time.time() * 1000),

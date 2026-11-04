@@ -621,22 +621,81 @@ async function latestReview() {
   return `<h1 style="font-size:clamp(1.5rem,3vw,2rem);margin-top:12px">Your reviews will appear here</h1><p class="hint">${data.total.toLocaleString()} games collected and ${data.analysed.toLocaleString()} analysed so far. Reviews are written as analysis finishes.</p>`;
 }
 
+const PATTERN_TEXT = { hung_piece: "leaving pieces hanging", missed_material: "missing chances to win a piece", allowed_mate: "allowing forced mates", missed_mate: "missing forced mates", low_clock: "slipping when low on time" };
+function weeklySection() {
+  const now = Date.now();
+  const week = data.games.filter((r) => r[C.at] >= now - 7 * 864e5 && !r[C.bot]);
+  const before = data.games.filter((r) => r[C.at] >= now - 14 * 864e5 && r[C.at] < now - 7 * 864e5 && !r[C.bot]);
+  if (!week.length) {
+    return `<section class="tight"><h2>This week</h2><p>No games in the last 7 days yet. <a href="#/practice">Practice your past mistakes</a> in the meantime.</p></section>`;
+  }
+  const count = (result) => week.filter((r) => r[C.result] === result).length;
+  const average = (rows) => {
+    const scored = rows.filter((r) => r[C.acc] != null && r[C.plies] >= 20);
+    return scored.length ? scored.reduce((sum, r) => sum + r[C.acc], 0) / scored.length : null;
+  };
+  const accuracy = average(week), earlier = average(before);
+  const change = accuracy != null && earlier != null ? `, ${accuracy >= earlier ? "up" : "down"} ${Math.abs(accuracy - earlier).toFixed(1)} from the week before` : "";
+  const ratings = {};
+  for (const r of week) if (r[C.rated] && r[C.diff] != null) {
+    const key = `${SITE_NAMES[r[C.site]]} ${r[C.speed]}`;
+    ratings[key] = (ratings[key] || 0) + r[C.diff];
+  }
+  const ratingText = Object.entries(ratings).filter(([, v]) => v).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ");
+  const tags = {};
+  for (const r of week) for (const t of (data.recent_tags || {})[r[C.id]] || []) tags[t] = (tags[t] || 0) + 1;
+  const common = Object.entries(tags).sort((a, b) => b[1] - a[1])[0];
+  const wins = week.filter((r) => r[C.result] === "win" && r[C.acc] != null && r[C.plies] >= 20);
+  const best = wins.sort((a, b) => b[C.acc] - a[C.acc])[0];
+  const items = [
+    `<li><b>${plural(week.length, "game")}:</b> ${count("win")} wins, ${count("draw")} draws, ${count("loss")} losses.</li>`,
+    accuracy != null ? `<li><b>Accuracy:</b> ${accuracy.toFixed(1)}%${change}.</li>` : "",
+    ratingText ? `<li><b>Rating change:</b> ${esc(ratingText)}.</li>` : "",
+    common ? `<li><b>Most common pattern:</b> ${PATTERN_TEXT[common[0]]} (${common[1]} ${common[1] === 1 ? "time" : "times"}). <a href="#/practice/${common[0]}">Practice this</a></li>` : "",
+    best ? `<li><b>Best win:</b> <a href="#/game/${best[C.id]}">${esc(best[C.opp])}</a>, ${Math.round(best[C.acc])}% accuracy.</li>` : "",
+  ].join("");
+  return `<section class="tight"><h2>This week</h2><ul class="week-list">${items}</ul><p><a class="button-link" href="#/practice/week">Practice this week's blunders</a></p></section>`;
+}
+
+const OVERVIEW_TABS = { summary: "Summary", progress: "Progress", openings: "Openings", style: "Style" };
+let overviewTab = "summary";
+try { overviewTab = OVERVIEW_TABS[localStorage.getItem("pinkroses-tab")] ? localStorage.getItem("pinkroses-tab") : "summary"; } catch { /* use the default tab */ }
+
 async function home() {
   setNav("home");
   const lead = await latestReview();
-  app.innerHTML = lead + styleSection() + goalSection() + progressSection() + chartSection() + clockSection() + mistakesSection() + openingsSection() + opponentsSection();
-  const host = document.getElementById("chart");
-  let days = 0, site = "lichess";
-  ratingChart(host, days, site);
-  const choose = (id, apply) => document.getElementById(id).addEventListener("click", (event) => {
-    const button = event.target.closest("button");
-    if (!button) return;
-    event.currentTarget.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b === button));
-    apply(button);
+  const panels = {
+    summary: () => weeklySection() + `<section>${lead}</section>` + goalSection(),
+    progress: () => progressSection() + chartSection() + clockSection() + mistakesSection(),
+    openings: () => openingsSection() + '<p><a class="button-link" href="#/openings">Open the opening explorer</a></p>',
+    style: () => styleSection() + opponentsSection(),
+  };
+  app.innerHTML = `<div class="tabs" role="tablist" aria-label="Overview sections">${Object.entries(OVERVIEW_TABS).map(([k, v]) => `<button role="tab" data-tab="${k}">${v}</button>`).join("")}</div><div id="tab-panel" role="tabpanel"></div>`;
+  const panel = document.getElementById("tab-panel");
+  const show = (tab) => {
+    overviewTab = tab;
+    try { localStorage.setItem("pinkroses-tab", tab); } catch { /* the tab just won't be remembered */ }
+    app.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === tab));
+    panel.innerHTML = panels[tab]();
+    const host = document.getElementById("chart");
+    if (!host) return;
+    let days = 0, site = "lichess";
     ratingChart(host, days, site);
+    const choose = (id, apply) => document.getElementById(id).addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      event.currentTarget.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b === button));
+      apply(button);
+      ratingChart(host, days, site);
+    });
+    choose("range", (b) => { days = +b.dataset.days; });
+    choose("chart-site", (b) => { site = b.dataset.site; });
+  };
+  app.querySelector(".tabs").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-tab]");
+    if (button) show(button.dataset.tab);
   });
-  choose("range", (b) => { days = +b.dataset.days; });
-  choose("chart-site", (b) => { site = b.dataset.site; });
+  show(overviewTab);
 }
 
 const listState = { site: "", speed: "", result: "", q: "", sort: "newest", from: "", to: "", min: "", max: "", comeback: false, upset: false, reviewed: false, brilliant: false, shown: 50 };
@@ -1122,7 +1181,7 @@ async function gameView(id, startPly) {
 }
 
 
-const THEME_NAMES = { all: "All themes", hung_piece: "Hanging pieces", missed_material: "Winning a piece", allowed_mate: "Stopping mate", missed_mate: "Finding mate", low_clock: "Low on time", opening: "Opening", middlegame: "Middlegame", endgame: "Endgame" };
+const THEME_NAMES = { all: "All themes", week: "This week", hung_piece: "Hanging pieces", missed_material: "Winning a piece", allowed_mate: "Stopping mate", missed_mate: "Finding mate", low_clock: "Low on time", opening: "Opening", middlegame: "Middlegame", endgame: "Endgame" };
 const PROGRESS_KEY = "pinkroses-practice-v1";
 const REVIEW_DAYS = [0, 1, 3, 7, 21, 60];
 
@@ -1146,6 +1205,7 @@ async function getPuzzles() {
 
 function matchesTheme(p, theme) {
   if (theme === "all") return true;
+  if (theme === "week") return p.at >= Date.now() - 7 * 864e5;
   return p.phase === theme || p.tags.includes(theme);
 }
 

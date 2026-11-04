@@ -505,6 +505,13 @@ def test_comeback_needs_a_win_from_a_clearly_lost_position():
     assert not insights.comeback({**game, "result": "loss"})
 
 
+def test_recent_tags_cover_only_recent_serious_errors():
+    now = int(review.time.time() * 1000)
+    recent = puzzle_game(id="new", at=now)
+    old = puzzle_game(id="old", at=now - 90 * 864 * 10**5)
+    assert insights.recent_tags([recent, old]) == {"new": ["hung_piece"]}
+
+
 def test_old_style_reviews_are_replaced(tmp_path):
     store = make_store(tmp_path, 1)
     store.games["g0"]["review"] = {"summary": "old"}
