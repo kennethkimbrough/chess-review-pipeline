@@ -3,7 +3,7 @@
   --bg: #f6f5f3; --panel: #eceae6; --ink: #1f1d1a; --soft: #5e5a54; --line: #d9d6d0;
   --accent: #1a66a6; --sq-light: #f0d9b5; --sq-dark: #b58863; --sq-hi: #cdd26a; --sq-hi-d: #aaa23a;
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
-  --m-blunder: #c62828; --m-mistake: #c75a00; --m-inaccuracy: #8a6d00; --m-great: #2e7d32; --m-brilliant: #0a83b8;
+  --m-blunder: #d12f20; --m-mistake: #b8610f; --m-inaccuracy: #8a7400; --m-great: #4a6f9c; --m-brilliant: #0d8a75;
   --win: #16784f; --loss: #b3261e; --draw: #5e5a54;
 }
 @media (prefers-color-scheme: dark) {
@@ -12,7 +12,7 @@
     --bg: #161512; --panel: #262421; --ink: #ebe9e5; --soft: #aaa69f; --line: #3b3834;
     --accent: #6cb2ec;
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
-    --m-blunder: #ff7b72; --m-mistake: #ffa657; --m-inaccuracy: #e3c34f; --m-great: #7ed08a; --m-brilliant: #56c8ff;
+    --m-blunder: #f34c3c; --m-mistake: #fdad66; --m-inaccuracy: #edcd2d; --m-great: #7c9cc3; --m-brilliant: #2ac7ac;
     --win: #62cfa0; --loss: #f4877f; --draw: #aaa69f;
   }
 }
@@ -92,9 +92,9 @@ input { min-width: 0; }
 .movetable .tone-blunder { color: var(--m-blunder); font-weight: 700; } .movetable .tone-mistake { color: var(--m-mistake); font-weight: 700; }
 .movetable .tone-inaccuracy { color: var(--m-inaccuracy); font-weight: 700; } .movetable .tone-great { color: var(--m-great); font-weight: 700; }
 .movetable .tone-brilliant { color: var(--m-brilliant); font-weight: 700; }
-.badge { position: absolute; top: 2%; right: 2%; width: 42cqw; height: 42cqw; min-width: 16px; min-height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font: 700 max(10px, 23cqw)/1 "Atkinson Hyperlegible", sans-serif; box-shadow: 0 0 0 1.5px #fff, 0 1px 3px rgba(0,0,0,.45); z-index: 1; }
-.cat-blunder { background: #c62828; } .cat-mistake { background: #c75a00; } .cat-inaccuracy { background: #8a6d00; }
-.cat-great { background: #2e7d32; } .cat-brilliant { background: #4fc3f7; color: #06283a; }
+.badge { position: absolute; top: 2%; right: 2%; width: 42cqw; height: 42cqw; min-width: 16px; min-height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.45); font: 700 max(10px, 23cqw)/1 "Atkinson Hyperlegible", sans-serif; box-shadow: 0 0 0 1.5px #fff, 0 1px 3px rgba(0,0,0,.45); z-index: 1; }
+.cat-blunder { background: #f34c3c; } .cat-mistake { background: #fdad66; } .cat-inaccuracy { background: #edcd2d; }
+.cat-great { background: #7c9cc3; } .cat-brilliant { background: #2ac7ac; }
 .movetable button.on .mark { color: inherit; }
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
