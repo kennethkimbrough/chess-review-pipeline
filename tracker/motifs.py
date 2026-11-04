@@ -196,3 +196,36 @@ def verified_tactics(game, boards, limit=14):
                 for kind, squares in move_motifs(board, board.parse_san(best)):
                     lines.append(f"{label(board)}{best} engine move: {kind} ({describe(squares)})")
     return lines[:limit]
+
+
+def is_sacrifice(board, move):
+    """True when a non-pawn piece can be taken at a real loss, the move isn't mate, and the capture is legal."""
+    piece = board.piece_at(move.from_square)
+    if piece is None or piece.piece_type in (chess.PAWN, chess.KING):
+        return False
+    captured = board.piece_at(move.to_square)
+    gained = VALUE[captured.piece_type] if captured else 0
+    if VALUE[piece.piece_type] - gained < 2:
+        return False
+    after = board.copy(stack=False)
+    after.push(move)
+    if after.is_checkmate():
+        return False
+    takers = [after.piece_at(m.from_square) for m in after.legal_moves if m.to_square == move.to_square]
+    return any(t.piece_type == chess.KING or VALUE[t.piece_type] < VALUE[piece.piece_type] for t in takers)
+
+
+def sacrifices(game):
+    """Plies where the player made the engine's top move and it was a real sacrifice."""
+    analysis = game.get("analysis") or {}
+    plies = sorted({h["ply"] for h in analysis.get("highlights", []) if "en prise" in h["why"]})
+    if not plies:
+        return []
+    board = chess.Board(game.get("fen") or chess.STARTING_FEN, chess960=game.get("variant") == "chess960")
+    found = []
+    for ply, san in enumerate(game["moves"].split(), 1):
+        move = board.parse_san(san)
+        if ply in plies and is_sacrifice(board, move):
+            found.append(ply)
+        board.push(move)
+    return found

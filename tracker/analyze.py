@@ -247,9 +247,15 @@ def analyse_game(game, engine, nodes, engine_name):
     }
 
 
+def needs_engine(game):
+    """Unanalysed, or analysed before the fuller format, unless it was deliberately skipped."""
+    analysis = game.get("analysis")
+    return analysis is None or ("skipped" not in analysis and analysis.get("version") != VERSION)
+
+
 def analyse_pending(store, engine_path, nodes, workers, deadline, games=None):
     """Analyses unanalysed games, newest first, until done or out of time."""
-    pending = iter(games if games is not None else [g for g in store.newest_first() if "analysis" not in g])
+    pending = iter(games if games is not None else [g for g in store.newest_first() if needs_engine(g)])
     lock = threading.Lock()
     done = [0]
     errors = []

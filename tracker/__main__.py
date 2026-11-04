@@ -15,7 +15,7 @@ def should_continue(store, config, key, progress):
     """True when work remains and this run got something done, so failures can't loop."""
     if not progress:
         return False
-    if any("analysis" not in g for g in store.games.values()):
+    if any(analyze.needs_engine(g) for g in store.games.values()):
         return True
     if not (config.get("reviews_enabled") and key and review.within_limits(store, config)[0]):
         return False
@@ -76,7 +76,7 @@ def main():
             analyze.analyse_pending(store, args.engine, config["engine_nodes"], args.workers, deadline, games=stale)
         reviewed = review.review_pending(store, config, key, deadline)
     analysed = analyze.analyse_pending(store, args.engine, config["engine_nodes"], args.workers, deadline)
-    pending = sum("analysis" not in g for g in store.games.values())
+    pending = sum(analyze.needs_engine(g) for g in store.games.values())
     if should_continue(store, config, key, analysed + reviewed):
         output = os.environ.get("GITHUB_OUTPUT")
         if output:
