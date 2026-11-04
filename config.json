@@ -34,6 +34,6 @@
   "review_recent_batch": {
     "speed": "blitz",
     "count": 2400,
-    "stop_at_usd": 12.25
+    "stop_at_usd": 10.25
   }
 }
