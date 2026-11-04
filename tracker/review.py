@@ -316,7 +316,8 @@ def in_scope(store, config):
         store.state["review_from_at"] = games[index]["at"]
         store.state_changed = True
     start = store.state.get("review_from_at", float("inf"))
-    return [g for g in games if g["at"] >= start]
+    speeds = set(config.get("review_all_speeds", []))
+    return [g for g in games if g["at"] >= start or g["speed"] in speeds]
 
 
 def needs_review(game):
@@ -334,8 +335,9 @@ def month_key():
 def within_limits(store, config):
     if store.state["cost_usd"] >= config["max_cost_usd"]:
         return False, f"the ${config['max_cost_usd']} total limit"
-    if store.state.get("spend_by_month", {}).get(month_key(), 0) >= config["monthly_limit_usd"]:
-        return False, f"the ${config['monthly_limit_usd']} monthly limit"
+    monthly = config.get("monthly_limit_overrides", {}).get(month_key(), config["monthly_limit_usd"])
+    if store.state.get("spend_by_month", {}).get(month_key(), 0) >= monthly:
+        return False, f"the ${monthly} monthly limit"
     return True, ""
 
 
