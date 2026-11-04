@@ -68,11 +68,18 @@ input { min-width: 0; }
 .moments b { display: block; }
 .moments .why { color: var(--soft); display: block; font-size: .94rem; }
 .tag-blunder { color: var(--loss); } .tag-mistake { color: var(--rose); } .tag-inaccuracy { color: var(--soft); }
-.movelist { line-height: 2; }
-.movelist button { min-height: 34px; padding: 1px 5px; background: none; border: 0; }
-.movelist button.on { background: var(--rose); color: var(--bg); }
-.movelist .n { color: var(--soft); margin-left: 6px; font-size: .9rem; }
 
+.movetable { max-height: 260px; overflow-y: auto; margin-top: 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overscroll-behavior: contain; }
+.movetable table { table-layout: fixed; }
+.movetable th { width: 2.6rem; padding: 0 8px 0 4px; border: 0; font-weight: 400; text-align: right; color: var(--soft); vertical-align: middle; }
+.movetable td { padding: 0; border: 0; }
+.movetable button { display: block; width: 100%; min-height: 40px; padding: 6px 10px; background: none; border: 0; border-radius: 4px; text-align: left; font-variant-numeric: tabular-nums; }
+.movetable button:hover { background: var(--panel); }
+.movetable button.on { background: var(--rose); color: var(--bg); font-weight: 700; }
+.fig { font-family: "Noto Sans Symbols2", "Segoe UI Symbol", "Apple Symbols", "DejaVu Sans", sans-serif; font-size: 1.12em; margin-right: 1px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.mark { margin-left: 2px; color: var(--loss); font-weight: 700; }
+.movetable button.on .mark { color: inherit; }
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
 th { text-align: left; font-weight: 700; color: var(--soft); font-size: .92rem; }

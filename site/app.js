@@ -377,6 +377,33 @@ function gamesView() {
   draw();
 }
 
+const FIGURINES = { K: "♔", Q: "♕", R: "♖", B: "♗", N: "♘" };
+function figurine(san) {
+  return esc(san).replace(/^[KQRBN]/, (p) => `<span class="fig" aria-hidden="true">${FIGURINES[p]}\uFE0E</span><span class="sr">${p}</span>`)
+    .replace(/=([QRBN])/, (_, p) => `=<span class="fig" aria-hidden="true">${FIGURINES[p]}\uFE0E</span><span class="sr">${p}</span>`);
+}
+
+function moveTable(detail, sans, moments) {
+  if (!sans.length) return "";
+  const parts = (detail.fen || "").split(" ");
+  const blackFirst = parts[1] === "b";
+  const first = +parts[5] || 1;
+  const marks = {};
+  for (const m of moments) if (m.cat !== "inaccuracy") marks[m.ply] = m.cat === "blunder" ? "??" : "?";
+  const cell = (ply) => {
+    if (ply < 1 || ply > sans.length) return "<td></td>";
+    const mark = marks[ply] ? `<span class="mark">${marks[ply]}</span>` : "";
+    return `<td><button data-ply="${ply}">${figurine(sans[ply - 1])}${mark}</button></td>`;
+  };
+  const rows = [];
+  const offset = blackFirst ? 1 : 0;
+  for (let i = 0; i * 2 - offset < sans.length; i++) {
+    const whitePly = i * 2 + 1 - offset;
+    rows.push(`<tr><th scope="row">${first + i}</th>${cell(whitePly)}${cell(whitePly + 1)}</tr>`);
+  }
+  return `<div class="movetable" id="moves" tabindex="0" aria-label="Moves"><table><tbody>${rows.join("")}</tbody></table></div>`;
+}
+
 function evalGraph(detail, row, ply) {
   if (!detail.evals) return "";
   const n = detail.evals.length - 1, W = 600, H = 90;
@@ -410,12 +437,12 @@ async function gameView(id, startPly) {
       <div id="board"></div>
       <div class="controls"><button id="first" aria-label="First position">⏮</button><button id="prev" aria-label="Previous move">◀</button><button id="next" aria-label="Next move">▶</button><button id="last" aria-label="Last position">⏭</button><span class="position" id="pos" aria-live="polite"></span></div>
       ${evalGraph(detail, row, ply)}
+      ${moveTable(detail, sans, moments)}
     </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true)}
       ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
       <p><a href="${esc(siteUrl)}" rel="noopener">Open on ${SITE_NAMES[row[C.site]]}</a></p></div></div>
     ${others.length ? `<section><h2>${reviewed.size ? "Other mistakes and blunders" : "Mistakes and blunders"}</h2><ul class="moments">${others.map((m) => `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(m.san)} <span class="tag-${m.cat}">${m.cat}</span></b><span class="why">${pawns(m.before)} to ${pawns(m.after)}${m.best ? `, ${esc(m.best)} was better` : ""}${m.tags.length ? `, ${m.tags.map((t) => TAG_SHORT[t]).join(", ")}` : ""}</span></button></li>`).join("")}</ul></section>` : ""}
-    ${(detail.sacrifices || []).length ? `<section><h2>Sacrifices</h2><ul class="moments">${detail.sacrifices.map((p) => `<li><button data-ply="${p}"><b>${moveLabel(p)} ${esc(sans[p - 1])}</b><span class="why">The engine's top move, leaving a piece where it can be taken.</span></button></li>`).join("")}</ul></section>` : ""}
-    <section><h2>Moves</h2><div class="movelist" id="moves">${sans.map((san, i) => `${i % 2 ? "" : `<span class="n">${i / 2 + 1}.</span>`}<button data-ply="${i + 1}">${esc(san)}</button>`).join("")}</div></section>`;
+    ${(detail.sacrifices || []).length ? `<section><h2>Sacrifices</h2><ul class="moments">${detail.sacrifices.map((p) => `<li><button data-ply="${p}"><b>${moveLabel(p)} ${esc(sans[p - 1])}</b><span class="why">The engine's top move, leaving a piece where it can be taken.</span></button></li>`).join("")}</ul></section>` : ""}`;
   const boardHost = document.getElementById("board");
   const pos = document.getElementById("pos");
   const evalNow = document.getElementById("evalnow");
@@ -424,7 +451,17 @@ async function gameView(id, startPly) {
     ply = Math.max(0, Math.min(line.frames.length - 1, next));
     boardHost.innerHTML = boardHTML(line.frames[ply], flip, line.marks[ply], ply ? `Board after ${moveLabel(ply)} ${sans[ply - 1]}` : "Starting position");
     pos.textContent = ply ? `${moveLabel(ply)} ${sans[ply - 1]}` : "Start";
-    document.querySelectorAll("#moves button").forEach((b) => b.classList.toggle("on", +b.dataset.ply === ply));
+    document.querySelectorAll("#moves button").forEach((b) => {
+      const current = +b.dataset.ply === ply;
+      b.classList.toggle("on", current);
+      if (current) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
+    });
+    const list = document.getElementById("moves");
+    const active = list && list.querySelector("button.on");
+    if (active) {
+      const box = list.getBoundingClientRect(), item = active.getBoundingClientRect();
+      if (item.top < box.top + 30 || item.bottom > box.bottom) list.scrollTop += item.top - box.top - box.height / 2;
+    } else if (list) list.scrollTop = 0;
     if (evalNow) { const x = ply / Math.max(1, detail.evals.length - 1) * 600; evalNow.setAttribute("x1", x); evalNow.setAttribute("x2", x); }
   };
   if (!line) boardHost.innerHTML = '<p class="note">This position can’t be replayed here. Open the original game instead.</p>';
