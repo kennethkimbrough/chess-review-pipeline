@@ -107,6 +107,7 @@ td.num, th.num { text-align: right; padding-right: 16px; }
   .game-head { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   body { font-size: 16px; }
   section { margin-top: 34px; }
+  .goal-table th:nth-child(5), .goal-table td:nth-child(5) { display: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .sq .pc { transition: opacity .08s; }
