@@ -28,6 +28,8 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -62,6 +64,7 @@ jobs:
             git commit -q -m "Update games $(date -u +%F)"
             for attempt in 1 2 3 4 5; do
               git pull -q --rebase origin main && git push -q origin HEAD:main && break
+              git rebase --abort 2>/dev/null || true
               if [ "$attempt" = 5 ]; then exit 1; fi
               sleep $(( attempt * 30 ))
             done
