@@ -11,6 +11,17 @@ from .store import Store
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def should_continue(store, config, key, progress):
+    """True when work remains and this run got something done, so failures can't loop."""
+    if not progress:
+        return False
+    if any("analysis" not in g for g in store.games.values()):
+        return True
+    if not (config.get("reviews_enabled") and key and review.within_limits(store, config)[0]):
+        return False
+    return any(review.needs_review(g) for g in review.in_scope(store, config))
+
+
 def run_review_test(store, config, key, args, path):
     picks = review.pick_test_games(store, config["test_games"])
     limit = time.time() + 600
@@ -65,6 +76,11 @@ def main():
         reviewed = review.review_pending(store, config, key, deadline)
     analysed = analyze.analyse_pending(store, args.engine, config["engine_nodes"], args.workers, deadline)
     pending = sum("analysis" not in g for g in store.games.values())
+    if should_continue(store, config, key, analysed + reviewed):
+        output = os.environ.get("GITHUB_OUTPUT")
+        if output:
+            with open(output, "a") as handle:
+                handle.write("more=true\n")
     print(
         f"New games {added}, analysed {analysed}, reviewed {reviewed}. "
         f"Games stored {len(store.games)}, awaiting analysis {pending}. "

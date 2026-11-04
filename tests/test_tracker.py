@@ -3,6 +3,7 @@ import json
 import chess
 import pytest
 
+from tracker.__main__ import should_continue
 from tracker import analyze, build, lichess, motifs, review
 from tracker.store import Store
 
@@ -239,6 +240,20 @@ def test_monthly_override_applies_only_to_its_month(tmp_path):
     store = make_store(tmp_path, 2)
     config = {**CONFIG, "review_latest": 2, "monthly_limit_usd": 0.5, "monthly_limit_overrides": {review.month_key(): 5.0}}
     assert review.review_pending(store, config, "k", far(), FakeSession([ok(0.6), ok(0.6)])) == 2
+
+
+def test_runs_continue_only_with_progress_and_remaining_work(tmp_path):
+    store = make_store(tmp_path, 2)
+    config = {**CONFIG, "reviews_enabled": True}
+    assert should_continue(store, config, "k", 1)
+    assert not should_continue(store, config, "k", 0)
+    assert not should_continue(store, config, None, 1)
+    assert not should_continue(store, {**config, "max_cost_usd": 0}, "k", 1)
+    for game in store.games.values():
+        game["review"] = {"v": review.REVIEW_VERSION}
+    assert not should_continue(store, config, "k", 1)
+    del store.games["g0"]["analysis"]
+    assert should_continue(store, config, None, 1)
 
 
 def test_old_style_reviews_are_replaced(tmp_path):
