@@ -54,7 +54,7 @@ function replay(detail) {
 }
 
 const NOTE = { blunder: "??", mistake: "?", inaccuracy: "?!", great: "!", brilliant: "!!", miss: "✕" };
-const CATEGORY_NAME = { brilliant: "Sacrifice", great: "Great", best: "Best", excellent: "Excellent", good: "Good", book: "Book", inaccuracy: "Inaccuracy", mistake: "Mistake", miss: "Miss", blunder: "Blunder" };
+const CATEGORY_NAME = { brilliant: "Brilliant", great: "Great", best: "Best", excellent: "Excellent", good: "Good", book: "Book", inaccuracy: "Inaccuracy", mistake: "Mistake", miss: "Miss", blunder: "Blunder" };
 const winPercent = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
 
 function annotations(detail, row) {
