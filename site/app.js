@@ -165,6 +165,92 @@ function boardRow(boardMarkup, cp, flip) {
   return `<div class="board-row"><div class="bar-slot">${cp == null ? "" : evalBar(cp, flip)}</div><div class="board-slot">${boardMarkup}</div></div>`;
 }
 
+const engine = {
+  worker: null, enabled: false, searching: false, pending: null, fen: null, lines: {}, listener: null,
+  start() {
+    if (this.worker) return;
+    this.worker = new Worker("vendor/stockfish/stockfish-19-lite-single.js");
+    this.worker.onmessage = (event) => this.onLine(String(event.data));
+    this.worker.onerror = () => { if (this.listener) this.listener(null, "The engine couldn't start in this browser."); };
+    this.worker.postMessage("uci");
+    this.worker.postMessage("setoption name MultiPV value 2");
+  },
+  analyse(fen) {
+    this.start();
+    if (this.fen === fen && (this.searching || Object.keys(this.lines).length)) return;
+    this.lines = {};
+    this.fen = fen;
+    if (this.searching) { this.pending = fen; this.worker.postMessage("stop"); return; }
+    this.run(fen);
+  },
+  run(fen) {
+    this.searching = true;
+    this.pending = null;
+    this.worker.postMessage(`position fen ${fen}`);
+    this.worker.postMessage("go depth 20 movetime 4000");
+  },
+  stop() {
+    this.fen = null;
+    this.lines = {};
+    this.pending = null;
+    if (this.worker && this.searching) this.worker.postMessage("stop");
+  },
+  onLine(line) {
+    if (line.startsWith("bestmove")) {
+      this.searching = false;
+      if (this.pending) this.run(this.pending);
+      else if (this.listener) this.listener(this.lines);
+      return;
+    }
+    if (this.pending || !line.startsWith("info") || !line.includes(" pv ")) return;
+    const part = line.match(/ multipv (\d+)/);
+    const depth = line.match(/ depth (\d+)/);
+    const score = line.match(/ score (cp|mate) (-?\d+)/);
+    const pv = line.split(" pv ")[1];
+    if (!score || !pv || !this.fen) return;
+    const whiteToMove = this.fen.split(" ")[1] === "w";
+    const value = +score[2] * (whiteToMove ? 1 : -1);
+    this.lines[part ? part[1] : "1"] = { depth: depth ? +depth[1] : 0, kind: score[1], value, pv: pv.trim().split(" ") };
+    if (this.listener) this.listener(this.lines);
+  },
+};
+
+function engineScore(line) {
+  if (line.kind === "mate") return `${line.value > 0 ? "" : "-"}M${Math.abs(line.value)}`;
+  return `${line.value > 0 ? "+" : ""}${(line.value / 100).toFixed(1)}`;
+}
+
+function lineToSan(fen, pv, limit = 8) {
+  const game = new Chess(fen);
+  const parts = fen.split(" ");
+  let number = +parts[5], white = parts[1] === "w";
+  const out = [];
+  for (const uci of pv.slice(0, limit)) {
+    const move = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+    if (!move) break;
+    out.push(white ? `${number}. ${move.san}` : (out.length ? move.san : `${number}... ${move.san}`));
+    if (!white) number += 1;
+    white = !white;
+  }
+  return out.join(" ");
+}
+
+function arrowsSVG(lines, flip) {
+  const center = (sq) => {
+    const file = sq.charCodeAt(0) - 97, rank = +sq[1] - 1;
+    return flip ? [(7 - file) * 100 + 50, rank * 100 + 50] : [file * 100 + 50, (7 - rank) * 100 + 50];
+  };
+  const parts = ["2", "1"].filter((k) => lines[k] && lines[k].pv[0]).map((k) => {
+    const uci = lines[k].pv[0];
+    const [x1, y1] = center(uci.slice(0, 2)), [x2, y2] = center(uci.slice(2, 4));
+    const angle = Math.atan2(y2 - y1, x2 - x1), head = 34;
+    const ex = x2 - Math.cos(angle) * head, ey = y2 - Math.sin(angle) * head;
+    const a = angle + Math.PI / 2, w = 26;
+    return `<g class="arrow arrow-${k}"><line x1="${x1}" y1="${y1}" x2="${ex}" y2="${ey}"/><polygon points="${x2},${y2} ${ex + Math.cos(a) * w},${ey + Math.sin(a) * w} ${ex - Math.cos(a) * w},${ey - Math.sin(a) * w}"/></g>`;
+  }).join("");
+  return `<svg class="arrows" viewBox="0 0 800 800" aria-hidden="true">${parts}</svg>`;
+}
+
 const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
 function boardHTML(fen, flip, mark, label, note) {
   const rows = fen.split(" ")[0].split("/");
@@ -184,10 +270,10 @@ function boardHTML(fen, flip, mark, label, note) {
     if (note && NOTE[note] && mark && mark[1] === name) {
       inner += `<span class="badge cat-${note}" title="${CATEGORY_NAME[note]}" aria-label="${CATEGORY_NAME[note]}">${NOTE[note]}</span>`;
     }
-    return `<div class="sq ${shade}${hi}">${inner}</div>`;
+    return `<div class="sq ${shade}${hi}" data-sq="${name}">${inner}</div>`;
   }
   if (flip) cells.reverse();
-  return `<div class="board" role="img" aria-label="${esc(label)}">${cells.join("")}</div>`;
+  return `<div class="board" role="group" aria-label="${esc(label)}">${cells.join("")}</div>`;
 }
 
 const SAN_TOKEN = "(?:O-O(?:-O)?|[KQRBN][a-h1-8]?x?[a-h][1-8]|[a-h]x[a-h][1-8](?:=[QRBN])?|[a-h][1-8](?:=[QRBN])?)[+#]?[!?]*";
@@ -570,6 +656,9 @@ async function gameView(id, startPly) {
       ${evalGraph(detail, row, ply)}
       ${playerBar(row, false)}<div class="board-row"><div class="bar-slot" id="evalbar"></div><div class="board-slot" id="board"></div></div>${playerBar(row, true)}
       <div class="controls"><button id="first" aria-label="First position">${ICONS.first}</button><button id="prev" aria-label="Previous move">${ICONS.prev}</button><button id="next" aria-label="Next move">${ICONS.next}</button><button id="last" aria-label="Last position">${ICONS.last}</button><span class="position" id="pos" aria-live="polite"></span></div>
+      <div id="promote" class="promote" hidden></div>
+      <div id="variation" class="variation" hidden></div>
+      <div class="engine-panel"><button id="engine-toggle" aria-pressed="false">Live engine</button><p class="note" id="engine-note">Tap a piece on the board to try your own moves.</p><div id="engine-lines"></div></div>
       ${moveTable(detail, sans, row)}
     </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true)}${summaryHTML(detail, row)}${styleHTML(detail)}
       ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
@@ -581,15 +670,76 @@ async function gameView(id, startPly) {
   const boardHost = document.getElementById("board");
   const pos = document.getElementById("pos");
   const evalNow = document.getElementById("evalnow");
-  const go = (next) => {
-    if (!line) return;
-    ply = Math.max(0, Math.min(line.frames.length - 1, next));
-    boardHost.innerHTML = boardHTML(line.frames[ply], flip, line.marks[ply], ply ? `Board after ${moveLabel(ply)} ${sans[ply - 1]}` : "Starting position", notes[ply]);
+  let variation = null;
+  let selected = null;
+  let targets = [];
+  const currentFen = () => (variation ? variation.frames[variation.index] : line ? line.frames[ply] : null);
+  const currentCp = () => {
+    if (variation && engine.enabled && engine.fen === currentFen() && engine.lines["1"]) {
+      const top = engine.lines["1"];
+      return top.kind === "mate" ? (top.value > 0 ? 1000 : -1000) : Math.max(-1000, Math.min(1000, top.value));
+    }
+    return !variation && detail.evals ? detail.evals[ply] : variation ? variation.cp : null;
+  };
+  const paintBoard = () => {
+    const fen = currentFen();
+    if (!fen) return;
+    const mark = variation ? variation.marks[variation.index] : line.marks[ply];
+    const note = variation ? null : notes[ply];
+    const label = variation ? "Board in your line" : ply ? `Board after ${moveLabel(ply)} ${sans[ply - 1]}` : "Starting position";
+    boardHost.innerHTML = boardHTML(fen, flip, mark, label, note)
+      + (engine.enabled && engine.fen === fen ? arrowsSVG(engine.lines, flip) : "");
+    if (selected) {
+      const from = boardHost.querySelector(`[data-sq="${selected}"]`);
+      if (from) from.classList.add("selected");
+      for (const t of targets) {
+        const cell = boardHost.querySelector(`[data-sq="${t.to}"]`);
+        if (cell) cell.classList.add(t.captured ? "can-take" : "can-move");
+      }
+    }
     const barHost = document.getElementById("evalbar");
-    if (barHost && detail.evals) barHost.innerHTML = evalBar(detail.evals[ply], flip);
-    pos.textContent = ply ? `${moveLabel(ply)} ${sans[ply - 1]}` : "Start";
+    const cp = currentCp();
+    if (barHost && cp != null) barHost.innerHTML = evalBar(cp, flip);
+  };
+  const paintEngine = () => {
+    const box = document.getElementById("engine-lines");
+    const button = document.getElementById("engine-toggle");
+    if (!box || !button) return;
+    button.setAttribute("aria-pressed", engine.enabled);
+    const fen = currentFen();
+    if (!engine.enabled || !fen) { box.innerHTML = ""; return; }
+    const lines = ["1", "2"].filter((k) => engine.fen === fen && engine.lines[k]).map((k) => engine.lines[k]);
+    box.innerHTML = lines.length
+      ? lines.map((l) => `<p class="engine-line"><b>${engineScore(l)}</b> ${esc(lineToSan(fen, l.pv))}</p>`).join("") + `<p class="note">Depth ${lines[0].depth}, Stockfish 19 Lite in your browser.</p>`
+      : new Chess(fen).game_over() ? '<p class="note">The game is over in this position.</p>' : '<p class="note">Thinking…</p>';
+  };
+  const paintVariation = () => {
+    const box = document.getElementById("variation");
+    if (!box) return;
+    box.hidden = !variation;
+    if (!variation) { box.innerHTML = ""; return; }
+    const parts = variation.frames[0].split(" ");
+    let number = +parts[5], white = parts[1] === "w";
+    const moves = variation.sans.map((san, i) => {
+      const prefix = white ? `${number}. ` : (i === 0 ? `${number}... ` : "");
+      if (!white) number += 1;
+      white = !white;
+      return `${prefix}<button data-var="${i + 1}"${variation.index === i + 1 ? ' class="on"' : ""}>${esc(san)}</button>`;
+    }).join(" ");
+    box.innerHTML = `<p class="variation-line"><b>Your line:</b> ${moves}</p><button id="leave-variation">Back to the game</button>`;
+  };
+  const analyseNow = () => {
+    const fen = currentFen();
+    if (engine.enabled && fen && !new Chess(fen).game_over()) engine.analyse(fen);
+    else if (engine.enabled) engine.stop();
+  };
+  const refresh = () => {
+    paintBoard();
+    pos.textContent = variation
+      ? (variation.index ? `Your line: ${variation.sans[variation.index - 1]}` : "Your line: start")
+      : ply ? `${moveLabel(ply)} ${sans[ply - 1]}` : "Start";
     document.querySelectorAll("#moves button").forEach((b) => {
-      const current = +b.dataset.ply === ply;
+      const current = !variation && +b.dataset.ply === ply;
       b.classList.toggle("on", current);
       if (current) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
     });
@@ -598,13 +748,103 @@ async function gameView(id, startPly) {
     if (active) {
       const box = list.getBoundingClientRect(), item = active.getBoundingClientRect();
       if (item.top < box.top + 30 || item.bottom > box.bottom) list.scrollTop += item.top - box.top - box.height / 2;
-    } else if (list) list.scrollTop = 0;
-    if (evalNow) { const x = ply / Math.max(1, detail.evals.length - 1) * 600; evalNow.setAttribute("x1", x); evalNow.setAttribute("x2", x); }
+    } else if (list && !variation) list.scrollTop = 0;
+    if (evalNow) { const x = ply / Math.max(1, (detail.evals || [0, 0]).length - 1) * 600; evalNow.setAttribute("x1", x); evalNow.setAttribute("x2", x); }
+    paintVariation();
+    analyseNow();
+    paintEngine();
   };
+  const clearSelection = () => { selected = null; targets = []; document.getElementById("promote").hidden = true; };
+  const go = (next) => {
+    if (!line) return;
+    variation = null;
+    clearSelection();
+    ply = Math.max(0, Math.min(line.frames.length - 1, next));
+    refresh();
+  };
+  const step = (delta) => {
+    if (!variation) { go(ply + delta); return; }
+    clearSelection();
+    const index = variation.index + delta;
+    if (index < 0) { go(ply); return; }
+    variation.index = Math.min(index, variation.sans.length);
+    refresh();
+  };
+  const playMove = (from, to, promotion) => {
+    const game = new Chess(currentFen());
+    const move = game.move({ from, to, promotion });
+    clearSelection();
+    if (!move) { refresh(); return; }
+    if (!variation && ply < sans.length && bareMove(sans[ply]) === bareMove(move.san)) { go(ply + 1); return; }
+    if (!variation) variation = { frames: [line.frames[ply]], marks: [line.marks[ply]], sans: [], index: 0, cp: detail.evals ? detail.evals[ply] : null };
+    variation.frames.length = variation.index + 1;
+    variation.marks.length = variation.index + 1;
+    variation.sans.length = variation.index;
+    variation.frames.push(game.fen());
+    variation.marks.push([move.from, move.to]);
+    variation.sans.push(move.san);
+    variation.index += 1;
+    if (!engine.enabled) engine.enabled = true;
+    refresh();
+  };
+  const onSquare = (square) => {
+    const fen = currentFen();
+    if (!fen) return;
+    const game = new Chess(fen);
+    const target = targets.find((t) => t.to === square);
+    if (selected && target) {
+      if (target.promotion) {
+        const box = document.getElementById("promote");
+        const from = selected;
+        box.hidden = false;
+        box.innerHTML = '<span>Promote to</span>' + [["q", "Queen"], ["r", "Rook"], ["b", "Bishop"], ["n", "Knight"]].map(([k, n]) => `<button data-promo="${k}">${n}</button>`).join("");
+        box.onclick = (event) => {
+          const button = event.target.closest("[data-promo]");
+          if (button) playMove(from, square, button.dataset.promo);
+        };
+        return;
+      }
+      playMove(selected, square);
+      return;
+    }
+    const piece = game.get(square);
+    if (piece && piece.color === game.turn() && square !== selected) {
+      selected = square;
+      targets = game.moves({ square, verbose: true });
+      paintBoard();
+    } else {
+      clearSelection();
+      paintBoard();
+    }
+  };
+  boardHost.addEventListener("click", (event) => {
+    const cell = event.target.closest("[data-sq]");
+    if (cell) onSquare(cell.dataset.sq);
+  });
+  engine.listener = (lines, problem) => {
+    if (problem) {
+      engine.enabled = false;
+      document.getElementById("engine-note").textContent = problem;
+      paintEngine();
+      return;
+    }
+    paintBoard();
+    paintEngine();
+  };
+  document.getElementById("engine-toggle").onclick = () => {
+    engine.enabled = !engine.enabled;
+    if (!engine.enabled) engine.stop();
+    refresh();
+  };
+  document.getElementById("variation").addEventListener("click", (event) => {
+    if (event.target.closest("#leave-variation")) { go(ply); return; }
+    const button = event.target.closest("[data-var]");
+    if (button) { clearSelection(); variation.index = +button.dataset.var; refresh(); }
+  });
   if (!line) boardHost.innerHTML = '<p class="note">This position can’t be replayed here. Open the original game instead.</p>';
   document.getElementById("first").onclick = () => go(0);
-  document.getElementById("prev").onclick = () => go(ply - 1);
-  document.getElementById("next").onclick = () => go(ply + 1);
+  document.getElementById("prev").onclick = () => step(-1);
+  document.getElementById("next").onclick = () => step(1);
   document.getElementById("last").onclick = () => go(Infinity);
   app.addEventListener("click", plyClick);
   const graph = document.getElementById("eval");
@@ -613,8 +853,8 @@ async function gameView(id, startPly) {
     go(Math.round((event.clientX - box.left) / box.width * (detail.evals.length - 1)));
   });
   keyHandler = (event) => {
-    if (event.key === "ArrowLeft") go(ply - 1);
-    if (event.key === "ArrowRight") go(ply + 1);
+    if (event.key === "ArrowLeft") step(-1);
+    if (event.key === "ArrowRight") step(1);
   };
   document.addEventListener("keydown", keyHandler);
   function plyClick(event) {
@@ -623,7 +863,7 @@ async function gameView(id, startPly) {
     go(+button.dataset.ply);
     if (!button.closest("#moves")) boardHost.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
-  cleanup = () => app.removeEventListener("click", plyClick);
+  cleanup = () => { app.removeEventListener("click", plyClick); engine.stop(); engine.enabled = false; engine.listener = null; };
   go(ply);
 }
 

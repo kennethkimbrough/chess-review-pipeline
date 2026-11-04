@@ -60,4 +60,4 @@ python -m tracker build
 python -m http.server --directory site
 ```
 
-Board replay uses [chess.js](https://github.com/jhlywa/chess.js) (BSD 2-Clause, see `site/vendor`).
+Live analysis on the site runs [Stockfish.js](https://github.com/nmrugg/stockfish.js) 19 Lite in the browser (GPLv3, see `site/vendor/stockfish`). Board replay uses [chess.js](https://github.com/jhlywa/chess.js) (BSD 2-Clause, see `site/vendor`).
