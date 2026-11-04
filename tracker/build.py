@@ -64,6 +64,7 @@ def build(store, config, out):
             game.get("rating"), game.get("diff"), game["opp"], game.get("opp_rating"),
             game["result"], family(game.get("opening")), analysis.get("acc"),
             counts.get("blunder"), counts.get("mistake"), int("review" in game),
+            game.get("site", "lichess"), int(bool(game.get("bot"))),
         ])
         months[month_of(game["at"])].append(game)
     for month, members in months.items():
@@ -71,7 +72,7 @@ def build(store, config, out):
         for game in members:
             analysis = game.get("analysis") or {}
             details[game["id"]] = {
-                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"],
+                "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"),
                 "opening": game.get("opening"), "eco": game.get("eco"), "variant": game.get("variant"),
                 "evals": analysis.get("evals"), "moments": analysis.get("moments"),
                 "acpl": analysis.get("acpl"), "counts": analysis.get("counts"),
@@ -79,7 +80,7 @@ def build(store, config, out):
                 "review": game.get("review"),
             }
         (out / "months" / f"{month}.json").write_text(json.dumps(details, separators=(",", ":"), ensure_ascii=False))
-    analysed = [g for g in games if is_analysed(g)]
+    analysed = [g for g in games if is_analysed(g) and not g.get("bot")]
     recent = analysed[-RECENT:]
     summary = {
         "username": config["username"],
@@ -92,6 +93,7 @@ def build(store, config, out):
         "tags": {"recent": tag_rates(recent), "all": tag_rates(analysed)},
         "phases": {"recent": phase_rates(recent), "all": phase_rates(analysed)},
         "recent_size": len(recent),
-        "openings": opening_rows([g for g in games if g["result"]]),
+        "openings": opening_rows([g for g in games if g["result"] and not g.get("bot")]),
+        "chesscom_username": config.get("chesscom_username"),
     }
     (out / "summary.json").write_text(json.dumps(summary, separators=(",", ":"), ensure_ascii=False))

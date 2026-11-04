@@ -62,7 +62,7 @@ def fetch_new(store, username, deadline, session=None, base=API):
     Returns the number of games added.
     """
     session = session or requests.Session()
-    newest = store.newest_at()
+    newest = store.newest_at("lichess")
     params = {
         "sort": "dateAsc", "moves": "true", "clocks": "true", "opening": "true",
         "evals": "false", "tags": "false", "finished": "true", "ongoing": "false",
@@ -91,8 +91,8 @@ def fetch_new(store, username, deadline, session=None, base=API):
             return added
         except requests.RequestException as error:
             print(f"Lichess download interrupted: {error}")
-            if store.newest_at() is not None:
-                params["since"] = store.newest_at() - OVERLAP_MS
+            if store.newest_at("lichess") is not None:
+                params["since"] = store.newest_at("lichess") - OVERLAP_MS
             time.sleep(10)
     return added
 

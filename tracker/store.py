@@ -50,8 +50,8 @@ class Store:
             spend[month] = round(spend.get(month, 0) + cost, 6)
             self.state_changed = True
 
-    def newest_at(self):
-        return max((g["at"] for g in self.games.values()), default=None)
+    def newest_at(self, site="lichess"):
+        return max((g["at"] for g in self.games.values() if g.get("site", "lichess") == site), default=None)
 
     def newest_first(self):
         return sorted(self.games.values(), key=lambda g: g["at"], reverse=True)

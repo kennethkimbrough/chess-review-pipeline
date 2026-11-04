@@ -4,7 +4,7 @@ import chess
 import pytest
 
 from tracker.__main__ import should_continue
-from tracker import analyze, build, lichess, motifs, review
+from tracker import analyze, build, chesscom, lichess, motifs, review
 from tracker.store import Store
 
 RAW = {
@@ -254,6 +254,68 @@ def test_runs_continue_only_with_progress_and_remaining_work(tmp_path):
     assert not should_continue(store, config, "k", 1)
     del store.games["g0"]["analysis"]
     assert should_continue(store, config, None, 1)
+
+
+CC_PGN = """[Event "Live Chess"]
+[Site "Chess.com"]
+[White "Qqisking"]
+[Black "Nelson-BOT"]
+[Result "1-0"]
+[ECO "C50"]
+[ECOUrl "https://www.chess.com/openings/Italian-Game-Paris-Defense-3...Nc6"]
+[TimeControl "600"]
+
+1. e4 {[%clk 0:09:59.9]} 1... e5 {[%clk 0:09:58]} 2. Bc4 {[%clk 0:09:55]} 2... Nc6 {[%clk 0:09:50]} 3. Qh5 {[%clk 0:09:50]} 3... Nf6 {[%clk 0:09:40]} 4. Qxf7# {[%clk 0:09:45]} 1-0
+"""
+CC_CONFIG = {"chesscom_username": "Qqisking", "review_latest": 1, "monthly_limit_usd": 1, "max_cost_usd": 1}
+
+
+def cc_raw(**changes):
+    raw = {"url": "https://www.chess.com/game/live/123456", "pgn": CC_PGN, "time_control": "600", "end_time": 1762000000,
+           "rated": False, "time_class": "rapid", "rules": "chess",
+           "white": {"username": "Qqisking", "rating": 1200, "result": "win"},
+           "black": {"username": "Nelson-BOT", "rating": 1300, "result": "checkmated"}}
+    raw.update(changes)
+    return raw
+
+
+def test_chesscom_game_is_normalized_from_the_players_side():
+    game = chesscom.normalize(cc_raw(), CC_CONFIG)
+    assert (game["id"], game["site"], game["color"], game["result"], game["status"]) == ("cc123456", "chesscom", "white", "win", "checkmated")
+    assert game["moves"] == "e4 e5 Bc4 Nc6 Qh5 Nf6 Qxf7#"
+    assert game["clocks"][0] == 600
+    assert game["bot"] is True
+    assert game["opening"].startswith("Italian Game")
+    assert chesscom.normalize(cc_raw(white={"username": "x"}, black={"username": "y"}), CC_CONFIG) is None
+
+
+def test_chesscom_bot_names_can_be_overridden():
+    assert chesscom.is_bot("Komodo1", {})
+    assert not chesscom.is_bot("Abbot", {})
+    assert chesscom.is_bot("Abbot", {"chesscom_bots": ["abbot"]})
+    assert not chesscom.is_bot("Nelson-BOT", {"chesscom_humans": ["nelson-bot"]})
+
+
+def test_chesscom_reviews_cover_only_human_games_when_enabled(tmp_path):
+    store = make_store(tmp_path, 1)
+    human = analysed_game()
+    human.update(id="cc1", site="chesscom", at=RAW["createdAt"] - 10**10, bot=False)
+    robot = analysed_game()
+    robot.update(id="cc2", site="chesscom", at=RAW["createdAt"] - 10**10, bot=True)
+    store.add(human)
+    store.add(robot)
+    off = {g["id"] for g in review.in_scope(store, {**CC_CONFIG})}
+    assert off == {"g0"}
+    on = {g["id"] for g in review.in_scope(store, {**CC_CONFIG, "chesscom_reviews_enabled": True})}
+    assert on == {"g0", "cc1"}
+
+
+def test_lichess_resume_ignores_chesscom_games(tmp_path):
+    store = make_store(tmp_path, 1)
+    other = analysed_game()
+    other.update(id="cc9", site="chesscom", at=RAW["createdAt"] + 10**9)
+    store.add(other)
+    assert store.newest_at("lichess") == RAW["createdAt"]
 
 
 def test_old_style_reviews_are_replaced(tmp_path):

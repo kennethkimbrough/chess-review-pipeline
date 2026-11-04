@@ -1,5 +1,6 @@
 "use strict";
-const C = { id: 0, at: 1, speed: 2, rated: 3, color: 4, rating: 5, diff: 6, opp: 7, oppRating: 8, result: 9, family: 10, acc: 11, blunders: 12, mistakes: 13, reviewed: 14 };
+const C = { id: 0, at: 1, speed: 2, rated: 3, color: 4, rating: 5, diff: 6, opp: 7, oppRating: 8, result: 9, family: 10, acc: 11, blunders: 12, mistakes: 13, reviewed: 14, site: 15, bot: 16 };
+const SITE_NAMES = { lichess: "Lichess", chesscom: "Chess.com" };
 const SPEEDS = ["bullet", "blitz", "rapid", "classical"];
 const SERIES = { bullet: "--s1", blitz: "--s2", rapid: "--s3", classical: "--s4" };
 const TAG_NAMES = {
@@ -110,7 +111,7 @@ function headline(row) {
 }
 function metaLine(row) {
   const color = row[C.color] === "w" ? "White" : "Black";
-  return `${dateText(row[C.at])}, ${row[C.speed]}, playing ${color}, ${esc(row[C.family])}`;
+  return `${dateText(row[C.at])}, ${SITE_NAMES[row[C.site]]} ${row[C.speed]}${row[C.bot] ? " against a bot" : ""}, playing ${color}, ${esc(row[C.family])}`;
 }
 
 function setNav(name) {
@@ -119,18 +120,19 @@ function setNav(name) {
   });
 }
 
-function ratingsBySpeed() {
+function ratingsBySpeed(site) {
   const out = {};
   for (const s of SPEEDS) out[s] = [];
   for (const row of data.games) {
-    if (row[C.rated] && row[C.rating] && out[row[C.speed]]) out[row[C.speed]].push(row);
+    if (row[C.site] === site && !row[C.bot] && row[C.rated] && row[C.rating] && out[row[C.speed]]) out[row[C.speed]].push(row);
   }
   return out;
 }
 
 function goalSection() {
-  const series = ratingsBySpeed();
-  const rows = SPEEDS.filter((s) => series[s].length).map((s) => {
+  const rows = Object.keys(SITE_NAMES).flatMap((site) => {
+    const series = ratingsBySpeed(site);
+    return SPEEDS.filter((s) => series[s].length).map((s) => {
     const list = series[s];
     const last = list[list.length - 1];
     const now = last[C.rating] + (last[C.diff] || 0);
@@ -139,14 +141,15 @@ function goalSection() {
     const state = gap <= 0
       ? `<span class="goal-met">✓ reached, ${-gap} above</span>`
       : `${gap} to go`;
-    return `<tr><td>${cap(s)}</td><td class="num">${now}</td><td>${state}</td><td class="num">${list.length.toLocaleString()}</td><td class="num">${Math.round(wins * 100 / list.length)}%</td></tr>`;
+    return `<tr><td>${SITE_NAMES[site]}</td><td>${cap(s)}</td><td class="num">${now}</td><td>${state}</td><td class="num">${list.length.toLocaleString()}</td><td class="num">${Math.round(wins * 100 / list.length)}%</td></tr>`;
+    });
   });
   if (!rows.length) return "";
-  return `<section><h2>Road to ${data.goal}</h2><div class="table-wrap"><table><thead><tr><th>Time control</th><th class="num">Rating</th><th>Goal</th><th class="num">Rated games</th><th class="num">Won</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
+  return `<section><h2>Road to ${data.goal}</h2><div class="table-wrap"><table><thead><tr><th>Site</th><th>Time control</th><th class="num">Rating</th><th>Goal</th><th class="num">Rated games</th><th class="num">Won</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
 }
 
-function ratingChart(host, days) {
-  const series = ratingsBySpeed();
+function ratingChart(host, days, site) {
+  const series = ratingsBySpeed(site);
   const now = data.games.length ? data.games[data.games.length - 1][C.at] : Date.now();
   const from = days ? now - days * 864e5 : Math.min(...SPEEDS.flatMap((s) => series[s].slice(0, 1).map((r) => r[C.at])));
   const lines = SPEEDS.map((s) => ({ s, pts: series[s].filter((r) => r[C.at] >= from).map((r) => [r[C.at], r[C.rating]]) })).filter((l) => l.pts.length);
@@ -211,7 +214,8 @@ function showTip(html, event) {
 
 function chartSection() {
   return `<section><h2>Rating over time</h2><div class="controls" id="range">
-    <button data-days="90">3 months</button><button data-days="365">1 year</button><button data-days="0" aria-pressed="true">All time</button></div><div class="chart" id="chart"></div></section>`;
+    <button data-days="90">3 months</button><button data-days="365">1 year</button><button data-days="0" aria-pressed="true">All time</button></div>
+    <div class="controls" id="chart-site"><button data-site="lichess" aria-pressed="true">Lichess</button><button data-site="chesscom">Chess.com</button></div><div class="chart" id="chart"></div></section>`;
 }
 
 function mistakesSection() {
@@ -256,22 +260,27 @@ async function home() {
   const lead = await latestReview();
   app.innerHTML = lead + goalSection() + chartSection() + mistakesSection() + openingsSection();
   const host = document.getElementById("chart");
-  ratingChart(host, 0);
-  document.getElementById("range").addEventListener("click", (event) => {
+  let days = 0, site = "lichess";
+  ratingChart(host, days, site);
+  const choose = (id, apply) => document.getElementById(id).addEventListener("click", (event) => {
     const button = event.target.closest("button");
     if (!button) return;
     event.currentTarget.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b === button));
-    ratingChart(host, +button.dataset.days);
+    apply(button);
+    ratingChart(host, days, site);
   });
+  choose("range", (b) => { days = +b.dataset.days; });
+  choose("chart-site", (b) => { site = b.dataset.site; });
 }
 
-const listState = { speed: "", result: "", q: "", shown: 50 };
+const listState = { site: "", speed: "", result: "", q: "", shown: 50 };
 function gamesView() {
   setNav("games");
   app.innerHTML = `<h1 style="font-size:clamp(2rem,5vw,3.2rem);margin-top:12px">Games</h1>
   <p class="hint" id="count"></p>
   <div class="filters">
     <input id="q" type="search" placeholder="Search opponent or opening" aria-label="Search opponent or opening" value="${esc(listState.q)}">
+    <select id="site" aria-label="Site"><option value="">All sites</option>${Object.entries(SITE_NAMES).map(([k, v]) => `<option value="${k}" ${listState.site === k ? "selected" : ""}>${v}</option>`).join("")}</select>
     <select id="speed" aria-label="Time control"><option value="">All time controls</option>${["ultraBullet", ...SPEEDS, "correspondence"].map((s) => `<option value="${s}" ${listState.speed === s ? "selected" : ""}>${cap(s)}</option>`).join("")}</select>
     <select id="result" aria-label="Result"><option value="">All results</option>${["win", "loss", "draw"].map((r) => `<option value="${r}" ${listState.result === r ? "selected" : ""}>${cap(r)}</option>`).join("")}</select>
   </div><ul class="rows" id="rows"></ul><p><button id="more" hidden>Show 50 more</button></p>`;
@@ -280,6 +289,7 @@ function gamesView() {
     const list = [];
     for (let i = data.games.length - 1; i >= 0; i--) {
       const r = data.games[i];
+      if (listState.site && r[C.site] !== listState.site) continue;
       if (listState.speed && r[C.speed] !== listState.speed) continue;
       if (listState.result && r[C.result] !== listState.result) continue;
       if (q && !r[C.opp].toLowerCase().includes(q) && !r[C.family].toLowerCase().includes(q)) continue;
@@ -289,12 +299,13 @@ function gamesView() {
     document.getElementById("rows").innerHTML = list.slice(0, listState.shown).map((r) => {
       const errs = r[C.blunders] == null ? "" : `, ${r[C.blunders]} ${r[C.blunders] === 1 ? "blunder" : "blunders"}`;
       const acc = r[C.acc] == null ? "" : `${Math.round(r[C.acc])}%`;
-      return `<li><a href="#/game/${r[C.id]}"><span class="res ${r[C.result]}">${resultWord[r[C.result]]}</span><span class="opp">${esc(r[C.opp])}${r[C.oppRating] ? ` (${r[C.oppRating]})` : ""}</span><span class="acc">${acc}</span><span class="dt">${new Date(r[C.at]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })}</span><span class="sub">${cap(r[C.speed])}, ${esc(r[C.family])}${errs}${r[C.reviewed] ? ", reviewed" : ""}</span></a></li>`;
+      return `<li><a href="#/game/${r[C.id]}"><span class="res ${r[C.result]}">${resultWord[r[C.result]]}</span><span class="opp">${esc(r[C.opp])}${r[C.oppRating] ? ` (${r[C.oppRating]})` : ""}</span><span class="acc">${acc}</span><span class="dt">${new Date(r[C.at]).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })}</span><span class="sub">${SITE_NAMES[r[C.site]]}, ${cap(r[C.speed])}${r[C.bot] ? ", bot" : ""}, ${esc(r[C.family])}${errs}${r[C.reviewed] ? ", reviewed" : ""}</span></a></li>`;
     }).join("") || '<li class="note">No games match. Clear a filter to see more.</li>';
     document.getElementById("more").hidden = list.length <= listState.shown;
   };
   const reset = (key) => (event) => { listState[key] = event.target.value; listState.shown = 50; draw(); };
   document.getElementById("q").addEventListener("input", reset("q"));
+  document.getElementById("site").addEventListener("change", reset("site"));
   document.getElementById("speed").addEventListener("change", reset("speed"));
   document.getElementById("result").addEventListener("change", reset("result"));
   document.getElementById("more").addEventListener("click", () => { listState.shown += 50; draw(); });
@@ -321,7 +332,7 @@ async function gameView(id) {
   const moments = detail.moments || [];
   let ply = line ? line.frames.length - 1 : 0;
   const flip = row[C.color] === "b";
-  const lichessUrl = `https://lichess.org/${row[C.id]}`;
+  const siteUrl = detail.url || `https://lichess.org/${row[C.id]}`;
   const counts = detail.counts;
   const stats = detail.skipped
     ? `<p class="note">Not analysed: ${esc(detail.skipped)}.</p>`
@@ -336,7 +347,7 @@ async function gameView(id) {
       ${evalGraph(detail, row, ply)}
     </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true)}
       ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
-      <p><a href="${lichessUrl}" rel="noopener">Open on Lichess</a></p></div></div>
+      <p><a href="${esc(siteUrl)}" rel="noopener">Open on ${SITE_NAMES[row[C.site]]}</a></p></div></div>
     ${others.length ? `<section><h2>${reviewed.size ? "Other mistakes and blunders" : "Mistakes and blunders"}</h2><ul class="moments">${others.map((m) => `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(m.san)} <span class="tag-${m.cat}">${m.cat}</span></b><span class="why">${pawns(m.before)} to ${pawns(m.after)}${m.best ? `, ${esc(m.best)} was better` : ""}${m.tags.length ? `, ${m.tags.map((t) => TAG_SHORT[t]).join(", ")}` : ""}</span></button></li>`).join("")}</ul></section>` : ""}
     <section><h2>Moves</h2><div class="movelist" id="moves">${sans.map((san, i) => `${i % 2 ? "" : `<span class="n">${i / 2 + 1}.</span>`}<button data-ply="${i + 1}">${esc(san)}</button>`).join("")}</div></section>`;
   const boardHost = document.getElementById("board");
@@ -350,7 +361,7 @@ async function gameView(id) {
     document.querySelectorAll("#moves button").forEach((b) => b.classList.toggle("on", +b.dataset.ply === ply));
     if (evalNow) { const x = ply / Math.max(1, detail.evals.length - 1) * 600; evalNow.setAttribute("x1", x); evalNow.setAttribute("x2", x); }
   };
-  if (!line) boardHost.innerHTML = '<p class="note">This position can’t be replayed here. Open it on Lichess instead.</p>';
+  if (!line) boardHost.innerHTML = '<p class="note">This position can’t be replayed here. Open the original game instead.</p>';
   document.getElementById("first").onclick = () => go(0);
   document.getElementById("prev").onclick = () => go(ply - 1);
   document.getElementById("next").onclick = () => go(ply + 1);
@@ -401,7 +412,7 @@ async function start() {
     app.innerHTML = `<h1>Game data isn’t available yet</h1><p class="hint">The first update hasn’t published it. Check again after the next run. (${esc(error.message)})</p>`;
     return;
   }
-  document.getElementById("foot").textContent = `${data.total.toLocaleString()} games from Lichess. ${data.analysed.toLocaleString()} analysed with Stockfish, ${data.reviewed.toLocaleString()} reviewed.`;
+  document.getElementById("foot").textContent = `${data.total.toLocaleString()} games from Lichess and Chess.com. ${data.analysed.toLocaleString()} analysed with Stockfish, ${data.reviewed.toLocaleString()} reviewed.`;
   addEventListener("hashchange", route);
   route();
 }
