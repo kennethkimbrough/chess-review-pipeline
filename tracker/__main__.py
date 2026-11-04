@@ -5,7 +5,7 @@ import os
 import time
 from pathlib import Path
 
-from . import analyze, build, chesscom, lichess, review
+from . import analyze, build, champions, chesscom, lichess, review
 from .store import Store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,6 +63,9 @@ def main():
     refreshed = analyze.refresh_accuracy(store)
     if refreshed:
         print(f"Refreshed accuracy for {refreshed} games")
+    matched = champions.assign(store)
+    if matched:
+        print(f"Matched champion styles for {matched} games")
     store.save()
     key = os.environ.get("OPENROUTER_API_KEY")
     test_path = ROOT / "data" / "review_test.json"

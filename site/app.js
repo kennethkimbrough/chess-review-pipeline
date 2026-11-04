@@ -53,15 +53,72 @@ function replay(detail) {
   return { frames, marks };
 }
 
-const MARK_CATEGORY = { "??": "blunder", "?": "mistake", "?!": "inaccuracy", "!": "great", "!!": "brilliant" };
-const MARK_NAME = { blunder: "Blunder", mistake: "Mistake", inaccuracy: "Inaccuracy", great: "Great move", brilliant: "Sacrifice" };
-function annotations(detail) {
-  const marks = {};
-  for (const m of detail.moments || []) marks[m.ply] = { blunder: "??", mistake: "?", inaccuracy: "?!" }[m.cat];
-  for (const m of detail.opponent_moments || []) marks[m.ply] = { blunder: "??", mistake: "?" }[m.cat];
-  for (const p of detail.great || []) marks[p] = "!";
-  for (const p of detail.sacrifices || []) marks[p] = "!!";
-  return marks;
+const NOTE = { blunder: "??", mistake: "?", inaccuracy: "?!", great: "!", brilliant: "!!", miss: "✕" };
+const CATEGORY_NAME = { brilliant: "Sacrifice", great: "Great", best: "Best", excellent: "Excellent", good: "Good", book: "Book", inaccuracy: "Inaccuracy", mistake: "Mistake", miss: "Miss", blunder: "Blunder" };
+const winPercent = (cp) => 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
+
+function annotations(detail, row) {
+  const notes = {};
+  const evals = detail.evals;
+  if (!evals) return notes;
+  const myParity = row[C.color] === "w" ? 1 : 0;
+  const moments = {};
+  for (const m of detail.moments || []) moments[m.ply] = m;
+  const theirErrors = {};
+  for (const m of detail.opponent_moments || []) theirErrors[m.ply] = m;
+  for (let ply = 1; ply < evals.length; ply++) {
+    const white = ply % 2 === 1;
+    const sign = white ? 1 : -1;
+    const drop = winPercent(evals[ply - 1] * sign) - winPercent(evals[ply] * sign);
+    const mine = ply % 2 === myParity;
+    let category;
+    if (mine && moments[ply]) {
+      category = moments[ply].cat;
+      const chance = theirErrors[ply - 1];
+      const stillOk = evals[ply] * sign >= -150;
+      if (stillOk && ((chance && !chance.punished && category !== "inaccuracy") || moments[ply].tags.includes("missed_mate"))) category = "miss";
+    } else if (!mine && theirErrors[ply]) category = theirErrors[ply].cat;
+    else if (drop >= 5) category = "inaccuracy";
+    else if (drop <= 1) category = "best";
+    else if (drop <= 2.5) category = "excellent";
+    else category = "good";
+    if (ply <= (detail.book_plies || 0) && !["blunder", "mistake", "miss"].includes(category)) category = "book";
+    notes[ply] = category;
+  }
+  for (const p of detail.great || []) notes[p] = "great";
+  for (const p of detail.sacrifices || []) notes[p] = "brilliant";
+  return notes;
+}
+
+function summaryHTML(detail, row) {
+  const notes = annotations(detail, row);
+  const plies = Object.keys(notes).map(Number);
+  if (!plies.length) return "";
+  const myParity = row[C.color] === "w" ? 1 : 0;
+  const rows = Object.keys(CATEGORY_NAME).map((category) => {
+    const matching = plies.filter((p) => notes[p] === category);
+    if (!matching.length) return "";
+    const mine = matching.filter((p) => p % 2 === myParity).length;
+    const mark = NOTE[category] ? ` ${NOTE[category]}` : "";
+    return `<tr><td class="tone-${category}">${CATEGORY_NAME[category]}${mark}</td><td class="num">${mine}</td><td class="num">${matching.length - mine}</td></tr>`;
+  }).join("");
+  return `<section class="tight"><h2>Move summary</h2><div class="table-wrap"><table class="summary"><thead><tr><th>Type</th><th class="num">You</th><th class="num">${esc(row[C.opp])}</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+}
+
+function styleHTML(detail) {
+  const style = detail.style;
+  if (!style) return "";
+  const [first, ...rest] = style.top;
+  const also = rest.map(([name, share]) => `${esc(name)} (${Math.round(share * 100)}%)`).join(", ");
+  const why = style.why && style.why.length ? `<p>Shared traits: ${esc(style.why.join(", "))}.</p>` : "";
+  return `<section class="tight"><h2>Played most like</h2><p class="headline">${esc(first[0])} (${Math.round(first[1] * 100)}%)</p>${why}${also ? `<p class="meta">Next closest: ${also}</p>` : ""}<p class="note">A rough, for-fun comparison of move patterns, such as captures, king pressure and pawn play. It says nothing about strength, one game is a small sample, and fast online games tend to lean toward the sharper, older champions. Compares 16 of the 18 undisputed champions: Ding Liren and Gukesh Dommaraju aren't in the data yet.</p></section>`;
+}
+
+function styleSection() {
+  const counts = data.style_counts || [];
+  if (!counts.length) return "";
+  const total = counts.reduce((sum, item) => sum + item[1], 0);
+  return `<section><h2>Champions you play most like</h2><p class="hint">How often each champion was the closest match across your ${total.toLocaleString()} human games. It's a rough comparison of move patterns, not strength.</p><div class="table-wrap"><table><thead><tr><th>Champion</th><th class="num">Games</th><th class="num">Share</th></tr></thead><tbody>${counts.slice(0, 6).map(([name, n]) => `<tr><td>${esc(name)}</td><td class="num">${n.toLocaleString()}</td><td class="num">${Math.round(n * 100 / total)}%</td></tr>`).join("")}</tbody></table></div></section>`;
 }
 
 const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
@@ -80,9 +137,8 @@ function boardHTML(fen, flip, mark, label, note) {
     const shade = (file + rank) % 2 ? "d" : "l";
     const hi = mark && mark.includes(name) ? " hi" : "";
     let inner = piece ? `<span class="pc ${piece === piece.toUpperCase() ? "w" : "b"}">${GLYPH[piece.toLowerCase()]}︎</span>` : "";
-    if (note && mark && mark[1] === name) {
-      const category = MARK_CATEGORY[note];
-      inner += `<span class="badge cat-${category}" title="${MARK_NAME[category]}" aria-label="${MARK_NAME[category]}">${note}</span>`;
+    if (note && NOTE[note] && mark && mark[1] === name) {
+      inner += `<span class="badge cat-${note}" title="${CATEGORY_NAME[note]}" aria-label="${CATEGORY_NAME[note]}">${NOTE[note]}</span>`;
     }
     return `<div class="sq ${shade}${hi}">${inner}</div>`;
   }
@@ -324,7 +380,7 @@ async function latestReview() {
     const line = replay(detail);
     let ply = (detail.moments || []).reduce((best, m) => (!best || m.before - m.after > best.before - best.after ? m : best), null);
     ply = ply ? ply.ply : (line ? line.frames.length - 1 : 0);
-    const board = line ? boardHTML(line.frames[ply], row[C.color] === "b", line.marks[ply], `Board after ${moveLabel(ply)}`, annotations(detail)[ply]) : "";
+    const board = line ? boardHTML(line.frames[ply], row[C.color] === "b", line.marks[ply], `Board after ${moveLabel(ply)}`, annotations(detail, row)[ply]) : "";
     return `<div class="game-head"><div>${playerBar(row, false)}${board}${playerBar(row, true)}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
       <div>${headline(row)}<p class="meta">${metaLine(row)}</p>${reviewHTML(detail, false, row[C.id])}<p><a href="#/game/${row[C.id]}">Replay this game</a></p></div></div>`;
   }
@@ -334,7 +390,7 @@ async function latestReview() {
 async function home() {
   setNav("home");
   const lead = await latestReview();
-  app.innerHTML = lead + goalSection() + chartSection() + mistakesSection() + openingsSection();
+  app.innerHTML = lead + goalSection() + chartSection() + styleSection() + mistakesSection() + openingsSection();
   const host = document.getElementById("chart");
   let days = 0, site = "lichess";
   ratingChart(host, days, site);
@@ -414,18 +470,18 @@ function figurine(san) {
     .replace(/=([QRBN])/, (_, p) => `=<span class="fig" aria-hidden="true">${FIGURINES[p]}\uFE0E</span><span class="sr">${p}</span>`);
 }
 
-function moveTable(detail, sans) {
+function moveTable(detail, sans, row) {
   if (!sans.length) return "";
   const parts = (detail.fen || "").split(" ");
   const blackFirst = parts[1] === "b";
   const first = +parts[5] || 1;
-  const marks = annotations(detail);
+  const marks = annotations(detail, row);
   const cell = (ply) => {
     if (ply < 1 || ply > sans.length) return "<td></td>";
-    const note = marks[ply];
-    const category = note ? MARK_CATEGORY[note] : "";
-    const mark = note ? `<span class="mark" title="${MARK_NAME[category]}">${note}</span>` : "";
-    return `<td><button data-ply="${ply}"${note ? ` class="tone-${category}"` : ""}>${figurine(sans[ply - 1])}${mark}</button></td>`;
+    const category = marks[ply];
+    const mark = category && NOTE[category] ? `<span class="mark">${NOTE[category]}</span>` : "";
+    const label = category ? ` title="${CATEGORY_NAME[category]}" class="tone-${category}"` : "";
+    return `<td><button data-ply="${ply}"${label}>${figurine(sans[ply - 1])}${mark}</button></td>`;
   };
   const rows = [];
   const offset = blackFirst ? 1 : 0;
@@ -469,14 +525,14 @@ async function gameView(id, startPly) {
       ${playerBar(row, false)}<div id="board"></div>${playerBar(row, true)}
       <div class="controls"><button id="first" aria-label="First position">${ICONS.first}</button><button id="prev" aria-label="Previous move">${ICONS.prev}</button><button id="next" aria-label="Next move">${ICONS.next}</button><button id="last" aria-label="Last position">${ICONS.last}</button><span class="position" id="pos" aria-live="polite"></span></div>
       ${evalGraph(detail, row, ply)}
-      ${moveTable(detail, sans)}
-    </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true)}
+      ${moveTable(detail, sans, row)}
+    </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true)}${summaryHTML(detail, row)}${styleHTML(detail)}
       ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
       <p><a href="${esc(siteUrl)}" rel="noopener">Open on ${SITE_NAMES[row[C.site]]}</a></p></div></div>
     ${others.length ? `<section><h2>${reviewed.size ? "Other mistakes and blunders" : "Mistakes and blunders"}</h2><ul class="moments">${others.map((m) => `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(m.san)} <span class="tag-${m.cat}">${m.cat}</span></b><span class="why">${pawns(m.before)} to ${pawns(m.after)}${m.best ? `, ${esc(m.best)} was better` : ""}${m.tags.length ? `, ${m.tags.map((t) => TAG_SHORT[t]).join(", ")}` : ""}</span></button></li>`).join("")}</ul></section>` : ""}
     ${(detail.great || []).length ? `<section><h2>Great moves</h2><ul class="moments">${detail.great.map((p) => `<li><button data-ply="${p}"><b>${moveLabel(p)} ${esc(sans[p - 1])}!</b><span class="why">The only move here that didn't lose.</span></button></li>`).join("")}</ul></section>` : ""}
     ${(detail.sacrifices || []).length ? `<section><h2>Sacrifices</h2><ul class="moments">${detail.sacrifices.map((p) => `<li><button data-ply="${p}"><b>${moveLabel(p)} ${esc(sans[p - 1])}!!</b><span class="why">The engine's top move, leaving a piece where it can be taken.</span></button></li>`).join("")}</ul></section>` : ""}`;
-  const notes = annotations(detail);
+  const notes = annotations(detail, row);
   const boardHost = document.getElementById("board");
   const pos = document.getElementById("pos");
   const evalNow = document.getElementById("evalnow");
