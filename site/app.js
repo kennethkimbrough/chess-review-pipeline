@@ -713,7 +713,7 @@ async function gameView(id, startPly) {
       <div class="controls"><button id="first" aria-label="First position">${ICONS.first}</button><button id="prev" aria-label="Previous move">${ICONS.prev}</button><button id="next" aria-label="Next move">${ICONS.next}</button><button id="last" aria-label="Last position">${ICONS.last}</button><span class="position" id="pos" aria-live="polite"></span></div>
       <div id="promote" class="promote" hidden></div>
       <div id="variation" class="variation" hidden></div>
-      <div class="engine-panel"><button id="engine-toggle" aria-pressed="false">Live engine</button><p class="note" id="engine-note">Tap a piece on the board to try your own moves.</p><div id="engine-lines"></div></div>
+      <div class="engine-panel"><button id="engine-toggle" aria-pressed="false">Live engine</button><p class="note" id="engine-note">Drag or tap a piece on the board to try your own moves.</p><div id="engine-lines"></div></div>
       ${moveTable(detail, sans, row)}
     </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true, undefined, row)}${summaryHTML(detail, row)}${styleHTML(detail)}
       ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
@@ -876,7 +876,65 @@ async function gameView(id, startPly) {
       paintBoard();
     }
   };
+  let drag = null;
+  let skipClick = false;
+  const endDrag = () => {
+    if (drag && drag.ghost) drag.ghost.remove();
+    drag = null;
+  };
+  const moveGhost = (event) => {
+    drag.ghost.style.left = `${event.clientX - drag.size / 2}px`;
+    drag.ghost.style.top = `${event.clientY - drag.size / 2}px`;
+  };
+  boardHost.addEventListener("pointerdown", (event) => {
+    if (event.button) return;
+    const cell = event.target.closest("[data-sq]");
+    const fen = currentFen();
+    if (!cell || !fen) return;
+    const square = cell.dataset.sq;
+    const game = new Chess(fen);
+    const piece = game.get(square);
+    if (!piece || piece.color !== game.turn()) return;
+    const image = cell.querySelector(".pc");
+    drag = { from: square, x: event.clientX, y: event.clientY, moved: false, wasSelected: selected === square, size: cell.offsetWidth, src: image ? image.src : "" };
+    selected = square;
+    targets = game.moves({ square, verbose: true });
+    paintBoard();
+    boardHost.setPointerCapture(event.pointerId);
+    skipClick = true;
+  });
+  boardHost.addEventListener("pointermove", (event) => {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 6) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      drag.ghost = document.createElement("img");
+      drag.ghost.src = drag.src;
+      drag.ghost.alt = "";
+      drag.ghost.className = "drag-piece";
+      drag.ghost.style.width = drag.ghost.style.height = `${drag.size}px`;
+      document.body.appendChild(drag.ghost);
+      const source = boardHost.querySelector(`[data-sq="${drag.from}"] .pc`);
+      if (source) source.style.opacity = "0.25";
+    }
+    moveGhost(event);
+  });
+  boardHost.addEventListener("pointerup", (event) => {
+    if (!drag) return;
+    const { moved, wasSelected, from } = drag;
+    endDrag();
+    if (!moved) {
+      if (wasSelected) { clearSelection(); paintBoard(); }
+      return;
+    }
+    const under = document.elementFromPoint(event.clientX, event.clientY);
+    const cell = under && under.closest("#board [data-sq]");
+    if (cell && cell.dataset.sq !== from && targets.some((t) => t.to === cell.dataset.sq)) onSquare(cell.dataset.sq);
+    else { clearSelection(); paintBoard(); }
+  });
+  boardHost.addEventListener("pointercancel", () => { endDrag(); clearSelection(); paintBoard(); });
   boardHost.addEventListener("click", (event) => {
+    if (skipClick) { skipClick = false; return; }
     const cell = event.target.closest("[data-sq]");
     if (cell) onSquare(cell.dataset.sq);
   });
