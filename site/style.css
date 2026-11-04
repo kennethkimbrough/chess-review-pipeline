@@ -73,6 +73,9 @@ section { margin-top: 44px; }
 .variation-line { line-height: 2.2; }
 .variation-line button { min-height: 34px; padding: 2px 8px; background: none; border: 0; }
 .variation-line button.on { background: var(--accent); color: var(--bg); }
+.play-panel { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 0; }
+.play-status { margin: 8px 0; font-weight: 700; }
+.play-status[hidden] { display: none; }
 .engine-panel { margin: 8px 0; }
 .engine-panel .note { margin: 8px 0 0; }
 .engine-line { margin: 8px 0 0; font-size: .94rem; overflow-wrap: anywhere; }
