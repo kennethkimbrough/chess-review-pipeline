@@ -307,9 +307,31 @@ def request_review(game, config, key, session, model=None, reasoning=None):
     return None, spent, last_error
 
 
+def held_ids(store):
+    """Games set aside for reviews that are imported separately."""
+    path = store.root / "review_holds.txt"
+    return set(path.read_text().split()) if path.exists() else set()
+
+
+def import_reviews(store):
+    """Applies reviews from data/imported_reviews.jsonl to games without a current review."""
+    path = store.root / "imported_reviews.jsonl"
+    if not path.exists():
+        return 0
+    count = 0
+    for line in path.read_text().splitlines():
+        item = json.loads(line)
+        game = store.games.get(item["id"])
+        if game and (game.get("review") or {}).get("v") != REVIEW_VERSION:
+            store.update(item["id"], review=item["review"])
+            count += 1
+    return count
+
+
 def in_scope(store, config):
     """Games from the latest N onward. The starting point is fixed the first time this runs."""
-    games = [g for g in store.newest_first() if len(g.get("moves", "").split()) >= 4
+    held = held_ids(store)
+    games = [g for g in store.newest_first() if g["id"] not in held and len(g.get("moves", "").split()) >= 4
              and g.get("variant", "standard") in ("standard", "fromPosition", "chess960") and not g.get("bot")
              and (g.get("site", "lichess") == "lichess" or config.get("chesscom_reviews_enabled"))]
     lichess_games = [g for g in games if g.get("site", "lichess") == "lichess"]
