@@ -1,4 +1,5 @@
 """Builds practice puzzles and the summary tables shown on the site."""
+import time
 from collections import Counter, defaultdict
 
 import chess
@@ -191,3 +192,18 @@ def comeback(game):
         return False
     sign = 1 if game["color"] == "white" else -1
     return min(cp * sign for cp in game["analysis"]["evals"]) <= -300
+
+
+def recent_tags(games, days=30):
+    """Error patterns per game for recent games, for the weekly summary on the site."""
+    if not games:
+        return {}
+    start = int(time.time() * 1000) - days * 864e5
+    found = {}
+    for game in games:
+        if game["at"] < start or game.get("bot") or not analysed(game):
+            continue
+        tags = [t for m in game["analysis"]["moments"] if m["cat"] != "inaccuracy" for t in m["tags"] if t in TAG_TEXT]
+        if tags:
+            found[game["id"]] = tags
+    return found
