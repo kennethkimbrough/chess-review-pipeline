@@ -780,7 +780,7 @@ function gamesView() {
     <label>From <input id="f-from" type="date" value="${esc(listState.from)}"></label><label>To <input id="f-to" type="date" value="${esc(listState.to)}"></label>
     <label>Opponent rating <input id="f-min" type="number" inputmode="numeric" placeholder="Min" aria-label="Minimum opponent rating" value="${esc(listState.min)}"></label><label>to <input id="f-max" type="number" inputmode="numeric" placeholder="Max" aria-label="Maximum opponent rating" value="${esc(listState.max)}"></label></div>
     <div class="filters checks"><label><input id="f-comeback" type="checkbox" ${listState.comeback ? "checked" : ""}> Wins from lost positions</label><label><input id="f-upset" type="checkbox" ${listState.upset ? "checked" : ""}> Upset wins (100+ higher rated)</label><label><input id="f-brilliant" type="checkbox" ${listState.brilliant ? "checked" : ""}> Has a brilliant move</label><label><input id="f-reviewed" type="checkbox" ${listState.reviewed ? "checked" : ""}> Reviewed</label></div></details>
-    <ul class="rows" id="rows"></ul><p><button id="more" hidden>Show 50 more</button></p>`;
+    <p><button id="clear-filters" hidden>Clear all filters</button></p><ul class="rows" id="rows"></ul><p><button id="more" hidden>Show 50 more</button></p>`;
   const draw = () => {
     const q = listState.q.toLowerCase();
     const list = [];
@@ -806,6 +806,7 @@ function gamesView() {
     sortGames(list);
     document.getElementById("rows").innerHTML = list.slice(0, listState.shown).map(gameRow).join("") || '<li class="note">No games match. Clear a filter to see more.</li>';
     document.getElementById("more").hidden = list.length <= listState.shown;
+    document.getElementById("clear-filters").hidden = !Object.keys(LIST_DEFAULTS).some((key) => key !== "shown" && listState[key] !== LIST_DEFAULTS[key]);
   };
   showRefresh();
   const reset = (key) => (event) => { listState[key] = event.target.value; listState.shown = 50; draw(); };
@@ -821,6 +822,7 @@ function gamesView() {
   document.getElementById("champion").addEventListener("change", reset("champion"));
   document.getElementById("model").addEventListener("change", reset("model"));
   document.getElementById("more").addEventListener("click", () => { listState.shown += 50; draw(); });
+  document.getElementById("clear-filters").addEventListener("click", () => { Object.assign(listState, LIST_DEFAULTS); gamesView(); });
   draw();
 }
 
