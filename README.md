@@ -1,8 +1,22 @@
 # pinkroses-lichess
 
+An automated pipeline that has reviewed over 11,000 of my chess games with Gemini and Claude and checks each review against the board.
+
 Tracks every game played by [PinkRoses](https://lichess.org/@/PinkRoses) on Lichess and [Qqisking](https://www.chess.com/member/qqisking) on Chess.com, checks each one with Stockfish, and publishes a written review of it, along with rating trends and recurring mistakes, as a GitHub Pages site.
 
 **Live site:** https://kennethkimbrough.github.io/pinkroses-lichess/
+
+![A reviewed game on the site, with the evaluation graph, board, clocks and written review](docs/game-review.png)
+
+## Highlights
+
+- **Runs unattended:** a scheduled GitHub Action fetches, analyses, reviews and publishes new games, with no server to maintain.
+- **Checks the AI's work:** a review is rejected if it cites a move or tactic the board doesn't support.
+- **Controls spending:** monthly and total limits are checked before each review, and interrupted work picks up on the next run.
+- **Combines two sites:** Lichess and Chess.com games share one data format, one set of analysis and one site.
+- **Tested:** 61 automated tests cover the tracker.
+
+<img src="docs/phone-overview.png" alt="The site's overview page on a phone" width="280">
 
 ## How it works
 
@@ -10,7 +24,7 @@ Every two hours a GitHub Action:
 
 1. Downloads new games from the public Lichess and Chess.com APIs.
 2. Runs Stockfish 17.1 on each position (100,000 nodes) to find mistakes, blunders and the moves the engine preferred.
-3. Sends the annotated game to `google/gemini-3.7-flash` through OpenRouter for a review of how the game unfolded. A review is rejected and retried if it cites a move that isn't in the game or an engine line, or names a pin, skewer, fork, discovered attack or back-rank tactic the board doesn't show. Reviews cover the latest 50 games at setup, every game after them, all rapid and classical games, and all human Chess.com games. Bot games are analysed but not reviewed or counted in stats.
+3. Sends the annotated game to `google/gemini-3.7-flash` through OpenRouter for a review of how the game unfolded. Another 999 reviews were written by Claude Sonnet 5.5 during a trial and imported. A review is rejected and retried if it cites a move that isn't in the game or an engine line, or names a pin, skewer, fork, discovered attack or back-rank tactic the board doesn't show. Reviews cover the latest 50 games at setup, every game after them, all rapid and classical games, and all human Chess.com games. Bot games are analysed but not reviewed or counted in stats.
 4. Commits the results to `data/` and publishes the site from `site/`.
 
 While work remains, each productive run queues the next one, so backlogs don't depend on the schedule. A run with no new games changes nothing and costs nothing. Variants, games under 4 half-moves and games whose reviews keep failing are kept in `data/` but left off the site. Older games are analysed newest first across runs and count toward the stats. If the repo has been quiet for 50 days, a small commit keeps the schedule from being disabled.
@@ -25,7 +39,14 @@ A brilliant move here is a sacrifice: the engine's top move that leaves a knight
 
 Accuracy follows the Lichess method, but on separate engine analysis, so it can differ slightly from the figure Lichess shows.
 
-The site also has practice positions from past blunders (`#/practice`, with progress saved per browser), an opening explorer, clock analysis and opponent pages.
+## On the site
+
+- **Game pages:** written reviews with clickable moves, an evaluation graph with markers, a move table, better-move arrows and each player's remaining time.
+- **Interactive board:** tap or drag pieces to try your own lines, analyse them with Stockfish in the browser, or play on against the computer from any position.
+- **Practice:** positions from past blunders, with streaks and spaced repeats. Progress is saved per browser.
+- **Games list:** search, sort and filter by site, time control, result, rating, date or closest world champion.
+- **Insights:** progress toward the rating goal, an opening explorer, clock analysis, playing style and opponent pages.
+- **Phone support:** a bottom navigation bar, and the site can be added to the home screen with its own icon.
 
 ## Setup
 
