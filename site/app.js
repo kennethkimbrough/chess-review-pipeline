@@ -1,5 +1,7 @@
 "use strict";
-const C = { id: 0, at: 1, speed: 2, rated: 3, color: 4, rating: 5, diff: 6, opp: 7, oppRating: 8, result: 9, family: 10, acc: 11, blunders: 12, mistakes: 13, reviewed: 14, site: 15, bot: 16, sacrifices: 17, plies: 18, great: 19, comeback: 20, champion: 21 };
+const C = { id: 0, at: 1, speed: 2, rated: 3, color: 4, rating: 5, diff: 6, opp: 7, oppRating: 8, result: 9, family: 10, acc: 11, blunders: 12, mistakes: 13, reviewed: 14, site: 15, bot: 16, sacrifices: 17, plies: 18, great: 19, comeback: 20, champion: 21, model: 22 };
+const MODEL_NAMES = { "google/gemini-3.7-flash": "Gemini 3.7 Flash", "Sonnet 5.5": "Claude Sonnet 5.5" };
+const modelName = (id) => MODEL_NAMES[id] || id;
 const SITE_NAMES = { lichess: "Lichess", chesscom: "Chess.com" };
 const SPEEDS = ["bullet", "blitz", "rapid", "classical"];
 const SERIES = { bullet: "--s1", blitz: "--s2", rapid: "--s3", classical: "--s4" };
@@ -717,8 +719,14 @@ async function home() {
   show(overviewTab);
 }
 
-const LIST_DEFAULTS = { site: "", speed: "", result: "", champion: "", q: "", from: "", to: "", min: "", max: "", comeback: false, upset: false, reviewed: false, brilliant: false, shown: 50 };
-const listState = { site: "", speed: "", result: "", champion: "", q: "", sort: "newest", from: "", to: "", min: "", max: "", comeback: false, upset: false, reviewed: false, brilliant: false, shown: 50 };
+function reviewModels() {
+  const counts = new Map();
+  for (const r of data.games) if (r[C.model]) counts.set(r[C.model], (counts.get(r[C.model]) || 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1]);
+}
+
+const LIST_DEFAULTS = { site: "", speed: "", result: "", champion: "", model: "", q: "", from: "", to: "", min: "", max: "", comeback: false, upset: false, reviewed: false, brilliant: false, shown: 50 };
+const listState = { site: "", speed: "", result: "", champion: "", model: "", q: "", sort: "newest", from: "", to: "", min: "", max: "", comeback: false, upset: false, reviewed: false, brilliant: false, shown: 50 };
 const SORTS = { newest: "Newest first", oldest: "Oldest first", best: "Highest accuracy", worst: "Lowest accuracy", opponentHigh: "Highest-rated opponent", opponentLow: "Lowest-rated opponent", sacrifices: "Most brilliant moves", great: "Most great moves" };
 function sortGames(list) {
   // Very short games can score 100%, so they rank after full games.
@@ -747,6 +755,7 @@ function gamesView() {
     <select id="speed" aria-label="Time control"><option value="">All time controls</option>${["ultraBullet", ...SPEEDS, "correspondence"].map((s) => `<option value="${s}" ${listState.speed === s ? "selected" : ""}>${cap(s)}</option>`).join("")}</select>
     <select id="result" aria-label="Result"><option value="">All results</option>${["win", "loss", "draw"].map((r) => `<option value="${r}" ${listState.result === r ? "selected" : ""}>${cap(r)}</option>`).join("")}</select>
     <select id="champion" aria-label="Closest world champion"><option value="">All champions</option>${(data.style_counts || []).map(([name, n]) => `<option value="${esc(name)}" ${listState.champion === name ? "selected" : ""}>${esc(name)} (${n.toLocaleString()})</option>`).join("")}</select>
+    <select id="model" aria-label="Review written by"><option value="">All review models</option>${reviewModels().map(([id, n]) => `<option value="${esc(id)}" ${listState.model === id ? "selected" : ""}>${esc(modelName(id))} (${n.toLocaleString()})</option>`).join("")}</select>
   </div><details class="more-filters"><summary>More filters</summary><div class="filters">
     <label>From <input id="f-from" type="date" value="${esc(listState.from)}"></label><label>To <input id="f-to" type="date" value="${esc(listState.to)}"></label>
     <label>Opponent rating <input id="f-min" type="number" inputmode="numeric" placeholder="Min" aria-label="Minimum opponent rating" value="${esc(listState.min)}"></label><label>to <input id="f-max" type="number" inputmode="numeric" placeholder="Max" aria-label="Maximum opponent rating" value="${esc(listState.max)}"></label></div>
@@ -761,6 +770,7 @@ function gamesView() {
       if (listState.speed && r[C.speed] !== listState.speed) continue;
       if (listState.result && r[C.result] !== listState.result) continue;
       if (listState.champion && r[C.champion] !== listState.champion) continue;
+      if (listState.model && r[C.model] !== listState.model) continue;
       if (listState.from && r[C.at] < Date.parse(listState.from)) continue;
       if (listState.to && r[C.at] >= Date.parse(listState.to) + 864e5) continue;
       if (listState.min && !(r[C.oppRating] >= +listState.min)) continue;
@@ -789,6 +799,7 @@ function gamesView() {
   document.getElementById("speed").addEventListener("change", reset("speed"));
   document.getElementById("result").addEventListener("change", reset("result"));
   document.getElementById("champion").addEventListener("change", reset("champion"));
+  document.getElementById("model").addEventListener("change", reset("model"));
   document.getElementById("more").addEventListener("click", () => { listState.shown += 50; draw(); });
   draw();
 }
@@ -867,7 +878,7 @@ async function gameView(id, startPly) {
       <div class="engine-panel"><button id="engine-toggle" aria-pressed="false">Live engine</button><p class="note" id="engine-note">Drag or tap a piece on the board to try your own moves.</p><div id="engine-lines"></div></div>
       ${moveTable(detail, sans, row)}
     </div><div>${headline(row)}<p class="meta">${metaLine(row)}</p>${stats}${noReview}${reviewHTML(detail, true, undefined, row)}${summaryHTML(detail, row)}${clockChart(detail, row)}${styleHTML(detail)}
-      ${detail.review ? `<p class="note">Review written by ${esc(detail.review.model)} from ${esc(detail.engine)} analysis.</p>` : ""}
+      ${detail.review ? `<p class="note">Review written by ${esc(modelName(detail.review.model))} from ${esc(detail.engine)} analysis.</p>` : ""}
       <p><a href="${esc(siteUrl)}" rel="noopener">Open on ${SITE_NAMES[row[C.site]]}</a></p></div></div>
     ${others.length ? `<section><h2>${reviewed.size ? "Other mistakes and blunders" : "Mistakes and blunders"}</h2><ul class="moments">${others.map((m) => `<li><button data-ply="${m.ply}"><b>${moveLabel(m.ply)} ${esc(m.san)} <span class="tag-${m.cat}">${m.cat}</span></b><span class="why">${pawns(m.before)} to ${pawns(m.after)}${m.best ? `, ${esc(m.best)} was better` : ""}${m.tags.length ? `, ${m.tags.map((t) => TAG_SHORT[t]).join(", ")}` : ""}</span></button></li>`).join("")}</ul></section>` : ""}
     ${(detail.great || []).length ? `<section><h2>Great moves</h2><ul class="moments">${detail.great.map((p) => `<li><button data-ply="${p}"><b>${moveLabel(p)} ${esc(sans[p - 1])}!</b><span class="why">The only move here that didn't lose.</span></button></li>`).join("")}</ul></section>` : ""}
