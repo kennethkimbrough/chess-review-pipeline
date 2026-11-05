@@ -1,10 +1,10 @@
-# pinkroses-lichess
+# chess-review-pipeline
 
 An automated pipeline that has reviewed over 11,000 of my chess games with Gemini and Claude and checks each review against the board.
 
 Tracks every game I play on Lichess and Chess.com, checks each one with Stockfish, and publishes a written review of it, along with rating trends and recurring mistakes, as a GitHub Pages site.
 
-**Live site:** https://kennethkimbrough.github.io/pinkroses-lichess/
+**Live site:** https://kennethkimbrough.github.io/chess-review-pipeline/
 
 ![A reviewed game on the site, with the evaluation graph, board, clocks and written review](docs/game-review.png)
 

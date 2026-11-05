@@ -8,7 +8,7 @@ import chess.pgn
 import requests
 
 API = "https://api.chess.com/pub/player/{user}/games/archives"
-HEADERS = {"User-Agent": "pinkroses-lichess", "Accept": "application/json"}
+HEADERS = {"User-Agent": "chess-review-pipeline", "Accept": "application/json"}
 BOT_NAME = re.compile(r"(-bot$|^bot[-_]|^komodo\d*$|^stockfish\d*$|^computer\d*$|^chesscomcomputer)", re.I)
 VARIANTS = {"chess": "standard", "chess960": "chess960", "kingofthehill": "kingOfTheHill", "threecheck": "threeCheck",
             "crazyhouse": "crazyhouse", "bughouse": "bughouse"}
