@@ -88,7 +88,7 @@ def build(store, config, out):
             details[game["id"]] = {
                 "moves": game.get("moves", ""), "fen": game.get("fen"), "status": game["status"], "url": game.get("url"), "sacrifices": game["sacrifices"], "great": analysis.get("great", []), "opponent_moments": analysis.get("opponent_moments"), "book_plies": game["book_plies"], "clocks": game.get("clocks"), "style": {k: v for k, v in game["style"].items() if k != "x"} if game.get("style") else None,
                 "opening": game.get("opening"), "eco": game.get("eco"), "variant": game.get("variant"),
-                "evals": analysis.get("evals"), "moments": analysis.get("moments"),
+                "evals": analysis.get("evals"), "mates": analysis.get("mates"), "big": analysis.get("big"), "moments": analysis.get("moments"),
                 "acpl": analysis.get("acpl"), "counts": analysis.get("counts"),
                 "engine": analysis.get("engine"), "skipped": analysis.get("skipped"),
                 "review": game.get("review"),

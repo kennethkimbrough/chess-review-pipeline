@@ -636,3 +636,44 @@ def test_build_writes_summary_and_month_details(tmp_path):
     assert summary["openings"][0]["name"] == "Italian Game"
     month = next((out / "months").glob("*.json"))
     assert "g0" in json.loads(month.read_text())
+
+
+class ScriptedEngine:
+    """Returns one prepared score per call."""
+
+    def __init__(self, scores):
+        self.scores, self.calls = list(scores), 0
+
+    def analyse(self, board, limit, game=None):
+        score = self.scores[self.calls]
+        self.calls += 1
+        return {"score": chess.engine.PovScore(score, chess.WHITE), "pv": [next(iter(board.legal_moves))]}
+
+
+def test_analysis_saves_mate_distance_and_real_score_past_the_cap():
+    moves = chess.engine.Cp(0), chess.engine.Mate(3), chess.engine.Cp(1250), chess.engine.Mate(-2), chess.engine.Cp(40), chess.engine.Cp(0), chess.engine.Cp(0)
+    result = analyze.analyse_game(game_record(), ScriptedEngine(moves), 1000, "SF")
+    assert result["evals"][1:4] == [1000, 1000, -1000]
+    assert result["mates"] == {"1": 3, "3": -2, "7": 0}
+    assert result["big"] == {"2": 1250}
+
+
+def test_mate_backfill_only_searches_capped_positions():
+    game = game_record()
+    game["analysis"] = {"evals": [0, 1000, 20, 20, 20, 20, 20, 1000]}
+    assert analyze.needs_mates(game)
+    engine = ScriptedEngine([chess.engine.Cp(1400)])
+    filled = analyze.fill_extreme(game, engine, 1000)
+    assert engine.calls == 1
+    assert filled["big"] == {"1": 1400}
+    assert filled["mates"] == {"7": 0}
+    below_cap = analyze.fill_extreme(game, ScriptedEngine([chess.engine.Cp(980)]), 1000)
+    assert below_cap["big"] == {"1": 980}
+    game["analysis"] = filled
+    assert not analyze.needs_mates(game)
+
+
+def test_mate_backfill_ignores_games_without_capped_scores():
+    assert not analyze.needs_mates({"analysis": {"evals": [0, 300, -50]}})
+    assert not analyze.needs_mates({"analysis": {"skipped": "variant"}})
+    assert not analyze.needs_mates({})
