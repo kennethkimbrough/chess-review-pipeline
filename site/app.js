@@ -1068,7 +1068,7 @@ async function gameView(id, startPly) {
     }
   };
   let drag = null;
-  let skipClick = false;
+  let press = null;
   const endDrag = () => {
     if (drag && drag.ghost) drag.ghost.remove();
     drag = null;
@@ -1079,8 +1079,8 @@ async function gameView(id, startPly) {
   };
   boardHost.addEventListener("pointerdown", (event) => {
     if (event.button) return;
-    skipClick = false;
     const cell = event.target.closest("[data-sq]");
+    press = cell ? { square: cell.dataset.sq, x: event.clientX, y: event.clientY } : null;
     const fen = currentFen();
     if (!cell || !fen || !canMoveNow()) return;
     const square = cell.dataset.sq;
@@ -1093,7 +1093,6 @@ async function gameView(id, startPly) {
     targets = game.moves({ square, verbose: true });
     paintBoard();
     boardHost.setPointerCapture(event.pointerId);
-    skipClick = true;
   });
   boardHost.addEventListener("pointermove", (event) => {
     if (!drag) return;
@@ -1111,27 +1110,28 @@ async function gameView(id, startPly) {
     }
     moveGhost(event);
   });
+  // Taps are handled here rather than on click, because selecting a piece redraws the square being pressed.
   boardHost.addEventListener("pointerup", (event) => {
-    if (!drag) return;
-    const { moved, wasSelected, from } = drag;
-    endDrag();
-    // A click may or may not follow, because the pressed square gets redrawn.
-    setTimeout(() => { skipClick = false; }, 0);
-    if (!moved) {
-      if (wasSelected) { clearSelection(); paintBoard(); }
+    if (!drag) {
+      const tapped = press && Math.hypot(event.clientX - press.x, event.clientY - press.y) < 12 ? press.square : null;
+      press = null;
+      if (tapped) onSquare(tapped);
       return;
     }
-    const under = document.elementFromPoint(event.clientX, event.clientY);
+    const { moved, wasSelected, from } = drag;
+    endDrag();
+    press = null;
+    const under = moved ? document.elementFromPoint(event.clientX, event.clientY) : null;
     const cell = under && under.closest("#board [data-sq]");
-    if (cell && cell.dataset.sq !== from && targets.some((t) => t.to === cell.dataset.sq)) onSquare(cell.dataset.sq);
+    if (!moved || (cell && cell.dataset.sq === from)) {
+      if (wasSelected) clearSelection();
+      paintBoard();
+      return;
+    }
+    if (cell && targets.some((t) => t.to === cell.dataset.sq)) onSquare(cell.dataset.sq);
     else { clearSelection(); paintBoard(); }
   });
-  boardHost.addEventListener("pointercancel", () => { skipClick = false; endDrag(); clearSelection(); paintBoard(); });
-  boardHost.addEventListener("click", (event) => {
-    if (skipClick) { skipClick = false; return; }
-    const cell = event.target.closest("[data-sq]");
-    if (cell) onSquare(cell.dataset.sq);
-  });
+  boardHost.addEventListener("pointercancel", () => { press = null; endDrag(); clearSelection(); paintBoard(); });
   engine.listener = (lines, problem) => {
     if (problem) {
       engine.enabled = false;
@@ -1230,7 +1230,7 @@ function choosePuzzle(list, state, skip) {
 }
 
 function wirePlayableBoard(host, { getFen, canMove, onPick }) {
-  let selected = null, targets = [], drag = null, skipClick = false;
+  let selected = null, targets = [], drag = null, press = null;
   const mark = () => {
     host.querySelectorAll(".selected,.can-move,.can-take").forEach((c) => c.classList.remove("selected", "can-move", "can-take"));
     if (!selected) return;
@@ -1244,10 +1244,11 @@ function wirePlayableBoard(host, { getFen, canMove, onPick }) {
   const clear = () => { selected = null; targets = []; mark(); };
   const choose = (from, to) => { clear(); onPick(from, to); };
   host.addEventListener("pointerdown", (event) => {
+    press = null;
     if (event.button || !canMove()) return;
-    skipClick = false;
     const cell = event.target.closest("[data-sq]");
     if (!cell) return;
+    press = { square: cell.dataset.sq, x: event.clientX, y: event.clientY };
     const game = new Chess(getFen());
     const piece = game.get(cell.dataset.sq);
     if (!piece || piece.color !== game.turn()) return;
@@ -1257,7 +1258,6 @@ function wirePlayableBoard(host, { getFen, canMove, onPick }) {
     targets = game.moves({ square: selected, verbose: true });
     mark();
     host.setPointerCapture(event.pointerId);
-    skipClick = true;
   });
   host.addEventListener("pointermove", (event) => {
     if (!drag) return;
@@ -1275,24 +1275,25 @@ function wirePlayableBoard(host, { getFen, canMove, onPick }) {
     drag.ghost.style.top = `${event.clientY - drag.size / 2}px`;
   });
   host.addEventListener("pointerup", (event) => {
-    if (!drag) return;
+    if (!drag) {
+      const tapped = press && Math.hypot(event.clientX - press.x, event.clientY - press.y) < 12 ? press.square : null;
+      press = null;
+      if (!tapped || !canMove()) return;
+      if (selected && targets.some((t) => t.to === tapped)) choose(selected, tapped);
+      else clear();
+      return;
+    }
     const { moved, was, from, ghost } = drag;
     if (ghost) ghost.remove();
     drag = null;
-    setTimeout(() => { skipClick = false; }, 0);
-    if (!moved) { if (was) clear(); return; }
-    const under = document.elementFromPoint(event.clientX, event.clientY);
+    press = null;
+    const under = moved ? document.elementFromPoint(event.clientX, event.clientY) : null;
     const cell = under && under.closest("[data-sq]");
+    if (!moved || (cell && cell.dataset.sq === from)) { if (was) clear(); return; }
     if (cell && host.contains(cell) && targets.some((t) => t.to === cell.dataset.sq)) choose(from, cell.dataset.sq);
     else clear();
   });
-  host.addEventListener("pointercancel", () => { if (drag && drag.ghost) drag.ghost.remove(); drag = null; skipClick = false; clear(); });
-  host.addEventListener("click", (event) => {
-    if (skipClick) { skipClick = false; return; }
-    if (!canMove()) return;
-    const cell = event.target.closest("[data-sq]");
-    if (cell && selected && targets.some((t) => t.to === cell.dataset.sq)) choose(selected, cell.dataset.sq);
-  });
+  host.addEventListener("pointercancel", () => { if (drag && drag.ghost) drag.ghost.remove(); drag = null; press = null; clear(); });
   return { clear, repaint: mark };
 }
 
