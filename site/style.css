@@ -111,6 +111,9 @@ a.plain { color: inherit; text-decoration: underline; text-decoration-thickness:
 .player .score.won { color: var(--win); }
 .player .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player .rating { color: var(--soft); }
+.player .clock { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--soft); padding: 1px 7px; border-radius: 4px; }
+.player .clock:empty { display: none; }
+.player .clock.active { color: var(--ink, inherit); background: var(--panel); }
 .player .gain { color: var(--win); } .player .lost { color: var(--loss); }
 .controls svg { display: block; width: 18px; height: 18px; fill: currentColor; }
 .controls button:has(svg) { display: flex; align-items: center; justify-content: center; min-width: 48px; }
