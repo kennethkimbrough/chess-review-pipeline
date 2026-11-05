@@ -243,8 +243,8 @@ th { font-size: .85rem; }
 
 @media (max-width: 760px) {
   .stats { grid-template-columns: repeat(2, 1fr); }
-  main { padding-bottom: 88px; }
-  footer { padding-bottom: 88px; }
+  main { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+  footer { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
   .top { padding-bottom: 0; }
   nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
   nav a { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 0; padding: 8px 2px 7px; font-size: .72rem; }
