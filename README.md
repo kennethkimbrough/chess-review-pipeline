@@ -2,7 +2,7 @@
 
 An automated pipeline that has reviewed over 11,000 of my chess games with Gemini and Claude and checks each review against the board.
 
-Tracks every game played by [PinkRoses](https://lichess.org/@/PinkRoses) on Lichess and [Qqisking](https://www.chess.com/member/qqisking) on Chess.com, checks each one with Stockfish, and publishes a written review of it, along with rating trends and recurring mistakes, as a GitHub Pages site.
+Tracks every game I play on Lichess and Chess.com, checks each one with Stockfish, and publishes a written review of it, along with rating trends and recurring mistakes, as a GitHub Pages site.
 
 **Live site:** https://kennethkimbrough.github.io/pinkroses-lichess/
 
