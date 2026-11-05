@@ -456,12 +456,26 @@ function reviewHTML(detail, showMoments, gameId, row) {
   return `<div class="review"><p>${esc(r.summary)}</p><h3>Turning point</h3><p>${esc(r.turning_point)}</p>${moments}<div class="focus"><h3>Work on this</h3><p>${esc(r.focus)}</p></div></div>`;
 }
 
-function playerBar(row, mine) {
+function formatClock(seconds) {
+  const t = Math.max(0, Math.round(seconds));
+  const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${Math.floor(t / 60)}:${sec}`;
+}
+
+// clocks[i] is the mover's time after move i + 1. Lichess adds one more entry when the game
+// ends without a final move: the time left for the player who was still to move.
+function clockAt(clocks, ply, moverOffset, moves) {
+  if (ply === moves && clocks.length > moves && ply % 2 === moverOffset) return clocks[ply];
+  const last = ply - 1 - ((ply - 1 - moverOffset) % 2 + 2) % 2;
+  return clocks[last >= 0 ? last : moverOffset];
+}
+
+function playerBar(row, mine, clockId) {
   const score = row[C.result] === "draw" ? "½" : (row[C.result] === "win") === mine ? "1" : "0";
   const name = mine ? (row[C.site] === "chesscom" ? data.chesscom_username : data.username) : row[C.opp];
   const rating = mine ? row[C.rating] : row[C.oppRating];
   const diff = mine && row[C.diff] ? `<span class="${row[C.diff] > 0 ? "gain" : "lost"}">${row[C.diff] > 0 ? "+" : ""}${row[C.diff]}</span>` : "";
-  return `<div class="player"><span class="score${score === "1" ? " won" : ""}">${score}</span><span class="name">${esc(name)}</span><span class="rating">${rating ?? ""}</span>${diff}</div>`;
+  return `<div class="player"><span class="score${score === "1" ? " won" : ""}">${score}</span><span class="name">${esc(name)}</span><span class="rating">${rating ?? ""}</span>${diff}${clockId ? `<span class="clock" id="${clockId}"></span>` : ""}</div>`;
 }
 
 const ICONS = {
@@ -840,7 +854,7 @@ async function gameView(id, startPly) {
   const others = moments.filter((m) => !reviewed.has(m.ply) && m.cat !== "inaccuracy");
   app.innerHTML = `<div class="game-head"><div>
       ${evalGraph(detail, row, ply)}
-      ${playerBar(row, false)}<div class="board-sticky"><div class="board-row"><div class="bar-slot" id="evalbar"></div><div class="board-slot" id="board"></div></div></div>${playerBar(row, true)}
+      ${playerBar(row, false, "clock-opp")}<div class="board-sticky"><div class="board-row"><div class="bar-slot" id="evalbar"></div><div class="board-slot" id="board"></div></div></div>${playerBar(row, true, "clock-me")}
       <div class="controls"><button id="first" aria-label="First position">${ICONS.first}</button><button id="prev" aria-label="Previous move">${ICONS.prev}</button><button id="next" aria-label="Next move">${ICONS.next}</button><button id="last" aria-label="Last position">${ICONS.last}</button><span class="position" id="pos" aria-live="polite"></span></div>
       <div id="promote" class="promote" hidden></div>
       <div id="variation" class="variation" hidden></div>
@@ -924,8 +938,22 @@ async function gameView(id, startPly) {
     if (engine.enabled && fen && !new Chess(fen).game_over()) engine.analyse(fen);
     else if (engine.enabled) engine.stop();
   };
+  const paintClocks = () => {
+    const clocks = detail.clocks;
+    const mineBox = document.getElementById("clock-me"), oppBox = document.getElementById("clock-opp");
+    if (!mineBox || !oppBox) return;
+    if (!clocks || !clocks.length || variation) { mineBox.textContent = oppBox.textContent = ""; return; }
+    const firstToMove = line ? line.frames[0].split(" ")[1] : "w";
+    const myOffset = row[C.color] === firstToMove ? 0 : 1;
+    mineBox.textContent = formatClock(clockAt(clocks, ply, myOffset, sans.length));
+    oppBox.textContent = formatClock(clockAt(clocks, ply, 1 - myOffset, sans.length));
+    const myTurn = ply % 2 === myOffset;
+    mineBox.classList.toggle("active", myTurn);
+    oppBox.classList.toggle("active", !myTurn);
+  };
   const refresh = () => {
     paintBoard();
+    paintClocks();
     pos.textContent = variation
       ? (variation.index ? `Your line: ${variation.sans[variation.index - 1]}` : "Your line: start")
       : ply ? `${moveLabel(ply)} ${sans[ply - 1]}` : "Start";
