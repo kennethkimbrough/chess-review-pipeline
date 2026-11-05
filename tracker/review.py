@@ -264,7 +264,7 @@ def request_review(game, config, key, session, model=None, reasoning=None):
         try:
             response = session.post(
                 URL, json=body, timeout=180,
-                headers={"Authorization": f"Bearer {key}", "X-Title": "pinkroses-lichess"},
+                headers={"Authorization": f"Bearer {key}", "X-Title": "chess-review-pipeline"},
             )
         except requests.RequestException as error:
             last_error = error

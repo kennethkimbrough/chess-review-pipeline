@@ -74,7 +74,7 @@ def fetch_new(store, username, deadline, session=None, base=API):
         try:
             with session.get(
                 base.format(user=username), params=params, stream=True, timeout=120,
-                headers={"Accept": "application/x-ndjson", "User-Agent": "pinkroses-lichess"},
+                headers={"Accept": "application/x-ndjson", "User-Agent": "chess-review-pipeline"},
             ) as response:
                 if response.status_code == 429:
                     time.sleep(70)
@@ -104,7 +104,7 @@ def fetch_lichess_accuracy(username, limit=20, session=None, base=API):
     result = {}
     with session.get(
         base.format(user=username), params=params, stream=True, timeout=120,
-        headers={"Accept": "application/x-ndjson", "User-Agent": "pinkroses-lichess"},
+        headers={"Accept": "application/x-ndjson", "User-Agent": "chess-review-pipeline"},
     ) as response:
         response.raise_for_status()
         for line in response.iter_lines():
