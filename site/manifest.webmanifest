@@ -1,6 +1,6 @@
 {
-  "name": "PinkRoses chess",
-  "short_name": "PinkRoses",
+  "name": "Chess Review",
+  "short_name": "Chess Review",
   "description": "Lichess and Chess.com games, analysed and reviewed.",
   "start_url": "./",
   "scope": "./",
