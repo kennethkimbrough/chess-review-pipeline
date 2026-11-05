@@ -73,6 +73,15 @@ def score_cp(score):
     return max(-MATE_CP, min(MATE_CP, score.white().score(mate_score=MATE_CP * 10)))
 
 
+def record_extreme(ply, score, mates, big):
+    """Keeps what the capped scale loses: the mate distance, or the score of a huge advantage."""
+    white = score.white()
+    if white.is_mate():
+        mates[str(ply)] = white.mate()
+    elif abs(white.score()) >= MATE_CP:
+        big[str(ply)] = white.score()
+
+
 def hangs_piece(board_after, reply):
     """True when the opponent's best reply wins a piece that can't be profitably retaken."""
     if reply is None or not board_after.is_capture(reply) or board_after.is_en_passant(reply):
@@ -137,19 +146,22 @@ def analyse_game(game, engine, nodes, engine_name):
 
     session = object()
     evals, bests, mates, lines = [], [], [], []
-    for position in positions:
+    mate_distances, big_scores = {}, {}
+    for ply, position in enumerate(positions):
         outcome = position.outcome()
         if outcome is not None:
             if outcome.winner is None:
                 evals.append(0)
             else:
                 evals.append(MATE_CP if outcome.winner == chess.WHITE else -MATE_CP)
+                mate_distances[str(ply)] = 0
             bests.append(None)
             mates.append(None)
             lines.append([])
             continue
         info = engine.analyse(position, chess.engine.Limit(nodes=nodes), game=session)
         evals.append(score_cp(info["score"]))
+        record_extreme(ply, info["score"], mate_distances, big_scores)
         pv = info.get("pv") or [None]
         bests.append(pv[0])
         lines.append(pv[:6] if pv[0] else [])
@@ -243,6 +255,8 @@ def analyse_game(game, engine, nodes, engine_name):
         "counts": counts,
         "phases": phases,
         "evals": evals,
+        "mates": mate_distances,
+        "big": big_scores,
         "moments": moments,
     }
 
@@ -253,6 +267,79 @@ def needs_engine(game):
     if analysis is None:
         return True
     return "skipped" not in analysis and (analysis.get("version") != VERSION or analysis.get("great_v") != GREAT_VERSION)
+
+
+def needs_mates(game):
+    """Analysed before mate distances were saved, with a position at the end of the scale."""
+    analysis = game.get("analysis") or {}
+    return "mates" not in analysis and any(abs(e) >= MATE_CP for e in analysis.get("evals") or [])
+
+
+def fill_extreme(game, engine, nodes):
+    """Finds mate distances and real scores for the capped positions of an analysed game."""
+    analysis = game["analysis"]
+    board = chess.Board(game.get("fen") or chess.STARTING_FEN, chess960=game["variant"] == "chess960")
+    sans = game["moves"].split()
+    mate_distances, big_scores = {}, {}
+    session = object()
+    for ply, cp in enumerate(analysis["evals"]):
+        if abs(cp) >= MATE_CP:
+            outcome = board.outcome()
+            if outcome is not None:
+                mate_distances[str(ply)] = 0
+            else:
+                white = engine.analyse(board, chess.engine.Limit(nodes=nodes), game=session)["score"].white()
+                # A fresh search can land just under the cap, so keep its score either way.
+                if white.is_mate():
+                    mate_distances[str(ply)] = white.mate()
+                else:
+                    big_scores[str(ply)] = white.score()
+        if ply < len(sans):
+            board.push_san(sans[ply])
+    return {**analysis, "mates": mate_distances, "big": big_scores}
+
+
+def fill_pending_mates(store, engine_path, nodes, workers, deadline):
+    """Backfills games analysed before mate distances were saved, newest first."""
+    pending = iter([g for g in store.newest_first() if needs_mates(g)])
+    lock = threading.Lock()
+    done = [0]
+    errors = []
+
+    def work():
+        engine = chess.engine.SimpleEngine.popen_uci(engine_path)
+        try:
+            engine.configure({"Threads": 1, "Hash": 64})
+            while time.time() < deadline:
+                with lock:
+                    game = next(pending, None)
+                if game is None:
+                    return
+                store.update(game["id"], analysis=fill_extreme(game, engine, nodes))
+                with lock:
+                    done[0] += 1
+                    if done[0] % 200 == 0:
+                        store.save()
+                        print(f"Filled mate distances for {done[0]} games")
+        except Exception as error:
+            errors.append(error)
+        finally:
+            try:
+                engine.quit()
+            except chess.engine.EngineError:
+                pass
+
+    threads = [threading.Thread(target=work) for _ in range(workers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    store.save()
+    if errors:
+        print(f"Engine errors while filling mate distances: {errors[:3]}")
+        if not done[0]:
+            raise errors[0]
+    return done[0]
 
 
 GREAT_VERSION = 1

@@ -27,7 +27,7 @@ const dateText = (ms) => new Date(ms).toLocaleDateString(undefined, { year: "num
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const resultWord = { win: "Won", loss: "Lost", draw: "Drew" };
-const pawns = (cp) => Math.abs(cp) >= 1000 ? (cp > 0 ? "winning by force" : "losing by force") : (cp > 0 ? "+" : "") + (cp / 100).toFixed(1);
+const pawns = (cp) => Math.abs(cp) >= 1000 ? (cp > 0 ? "winning decisively" : "losing decisively") : (cp > 0 ? "+" : "") + (cp / 100).toFixed(1);
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + "s"}`;
 const moveLabel = (ply) => `${Math.ceil(ply / 2)}${ply % 2 ? "." : "..."}`;
 
@@ -154,17 +154,24 @@ function showRefresh() {
 }
 setInterval(showRefresh, 30000);
 
-function evalBar(cp, flip) {
+function evalLabelFrom(detail, ply) {
+  const mate = detail.mates && detail.mates[ply];
+  if (mate != null) return mate === 0 ? "#" : `M${Math.abs(mate)}`;
+  const big = detail.big && detail.big[ply];
+  return big != null ? (Math.abs(big) / 100).toFixed(1) : null;
+}
+
+function evalBar(cp, flip, label) {
   const whiteShare = winPercent(cp);
-  const value = Math.abs(cp) >= 1000 ? "M" : (Math.abs(cp) / 100).toFixed(1);
+  const value = label || (Math.abs(cp) >= 1000 ? "10+" : (Math.abs(cp) / 100).toFixed(1));
   const whiteAhead = cp >= 0;
   const onBottom = whiteAhead !== flip;
   const fill = flip ? `top:0;height:${whiteShare}%` : `bottom:0;height:${whiteShare}%`;
   return `<div class="evalbar" role="img" aria-label="Evaluation ${cp >= 0 ? "White" : "Black"} ${value}"><div class="white-fill" style="${fill}"></div><span class="val ${onBottom ? "low" : "high"} ${whiteAhead ? "on-white" : "on-black"}">${value}</span></div>`;
 }
 
-function boardRow(boardMarkup, cp, flip) {
-  return `<div class="board-row"><div class="bar-slot">${cp == null ? "" : evalBar(cp, flip)}</div><div class="board-slot">${boardMarkup}</div></div>`;
+function boardRow(boardMarkup, cp, flip, label) {
+  return `<div class="board-row"><div class="bar-slot">${cp == null ? "" : evalBar(cp, flip, label)}</div><div class="board-slot">${boardMarkup}</div></div>`;
 }
 
 const engine = {
@@ -651,7 +658,7 @@ async function latestReview() {
     let ply = (detail.moments || []).reduce((best, m) => (!best || m.before - m.after > best.before - best.after ? m : best), null);
     ply = ply ? ply.ply : (line ? line.frames.length - 1 : 0);
     const board = line ? boardHTML(line.frames[ply], row[C.color] === "b", line.marks[ply], `Board after ${moveLabel(ply)}`, annotations(detail, row)[ply]) : "";
-    return `<div class="game-head"><div>${playerBar(row, false)}${boardRow(board + (line ? betterArrow(betterMove(detail, annotations(detail, row), line.frames, ply), row[C.color] === "b") : ""), detail.evals ? detail.evals[ply] : null, row[C.color] === "b")}${playerBar(row, true)}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
+    return `<div class="game-head"><div>${playerBar(row, false)}${boardRow(board + (line ? betterArrow(betterMove(detail, annotations(detail, row), line.frames, ply), row[C.color] === "b") : ""), detail.evals ? detail.evals[ply] : null, row[C.color] === "b", evalLabelFrom(detail, ply))}${playerBar(row, true)}<p class="note">Your biggest swing, after move ${Math.ceil(ply / 2)}.</p></div>
       <div>${headline(row)}<p class="meta">${metaLine(row)}</p>${reviewHTML(detail, false, row[C.id], row)}<p><a href="#/game/${row[C.id]}">Replay this game</a></p></div></div>`;
   }
   return `<h1 style="font-size:clamp(1.5rem,3vw,2rem);margin-top:12px">Your reviews will appear here</h1><p class="hint">${data.total.toLocaleString()} games collected and ${data.analysed.toLocaleString()} analysed so far. Reviews are written as analysis finishes.</p>`;
@@ -921,6 +928,15 @@ async function gameView(id, startPly) {
     }
     return !variation && detail.evals ? detail.evals[ply] : variation ? variation.cp : null;
   };
+  const currentEvalLabel = () => {
+    if (variation) {
+      const top = engine.enabled && engine.fen === currentFen() ? engine.lines["1"] : null;
+      if (top && top.kind === "mate") return `M${Math.abs(top.value)}`;
+      if (top && Math.abs(top.value) >= 1000) return (Math.abs(top.value) / 100).toFixed(1);
+      return variation.index === 0 ? evalLabelFrom(detail, ply) : null;
+    }
+    return evalLabelFrom(detail, ply);
+  };
   const paintBoard = () => {
     const fen = currentFen();
     if (!fen) return;
@@ -941,7 +957,7 @@ async function gameView(id, startPly) {
     }
     const barHost = document.getElementById("evalbar");
     const cp = currentCp();
-    if (barHost) barHost.innerHTML = cp == null ? "" : evalBar(cp, flip);
+    if (barHost) barHost.innerHTML = cp == null ? "" : evalBar(cp, flip, currentEvalLabel());
   };
   const paintEngine = () => {
     const box = document.getElementById("engine-lines");
