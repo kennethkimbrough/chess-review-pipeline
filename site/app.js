@@ -345,7 +345,27 @@ function betterArrow(better, flip) {
 }
 
 const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
+function checkedKingSquare(fen) {
+  try {
+    const game = new Chess(fen);
+    if (!game.in_check()) return null;
+    const king = game.turn() === "w" ? "K" : "k";
+    let square = null;
+    fen.split(" ")[0].split("/").forEach((row, rank) => {
+      let file = 0;
+      for (const ch of row) {
+        if (ch === king) square = "abcdefgh"[file] + (8 - rank);
+        file += /\d/.test(ch) ? +ch : 1;
+      }
+    });
+    return square;
+  } catch {
+    return null;
+  }
+}
+
 function boardHTML(fen, flip, mark, label, note) {
+  const checked = checkedKingSquare(fen);
   const rows = fen.split(" ")[0].split("/");
   const cells = [];
   rows.forEach((row, rank) => {
@@ -358,7 +378,7 @@ function boardHTML(fen, flip, mark, label, note) {
   function cell(file, rank, piece) {
     const name = "abcdefgh"[file] + (8 - rank);
     const shade = (file + rank) % 2 ? "d" : "l";
-    const hi = mark && mark.includes(name) ? " hi" : "";
+    const hi = (mark && mark.includes(name) ? " hi" : "") + (name === checked ? " in-check" : "");
     let inner = piece ? `<img class="pc" src="vendor/pieces/${piece === piece.toUpperCase() ? "w" : "b"}${piece.toUpperCase()}.svg" alt="" draggable="false">` : "";
     if (note && NOTE[note] && mark && mark[1] === name) {
       inner += `<span class="badge cat-${note}" title="${CATEGORY_NAME[note]}" aria-label="${CATEGORY_NAME[note]}">${NOTE[note]}</span>`;
