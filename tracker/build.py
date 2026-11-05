@@ -77,6 +77,7 @@ def build(store, config, out):
             counts.get("blunder"), counts.get("mistake"), int("review" in game),
             game.get("site", "lichess"), int(bool(game.get("bot"))), len(game["sacrifices"]),
             len(game.get("moves", "").split()), len(analysis.get("great", [])), int(insights.comeback(game)),
+            (game["style"]["top"][0][0] if game.get("style") and not game.get("bot") else None),
         ])
         months[month_of(game["at"])].append(game)
     for month, members in months.items():

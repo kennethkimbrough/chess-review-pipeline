@@ -1,5 +1,5 @@
 "use strict";
-const C = { id: 0, at: 1, speed: 2, rated: 3, color: 4, rating: 5, diff: 6, opp: 7, oppRating: 8, result: 9, family: 10, acc: 11, blunders: 12, mistakes: 13, reviewed: 14, site: 15, bot: 16, sacrifices: 17, plies: 18, great: 19, comeback: 20 };
+const C = { id: 0, at: 1, speed: 2, rated: 3, color: 4, rating: 5, diff: 6, opp: 7, oppRating: 8, result: 9, family: 10, acc: 11, blunders: 12, mistakes: 13, reviewed: 14, site: 15, bot: 16, sacrifices: 17, plies: 18, great: 19, comeback: 20, champion: 21 };
 const SITE_NAMES = { lichess: "Lichess", chesscom: "Chess.com" };
 const SPEEDS = ["bullet", "blitz", "rapid", "classical"];
 const SERIES = { bullet: "--s1", blitz: "--s2", rapid: "--s3", classical: "--s4" };
@@ -121,7 +121,7 @@ function styleSection() {
   const counts = data.style_counts || [];
   const total = counts.reduce((sum, item) => sum + item[1], 0);
   const why = overall.why.length ? `<p>Shared traits: ${esc(overall.why.join(", "))}.</p>` : "";
-  const table = counts.length ? `<h3 class="sub-head">Closest match game by game</h3><div class="table-wrap"><table><thead><tr><th>Champion</th><th class="num">Games</th><th class="num">Share</th></tr></thead><tbody>${counts.slice(0, 6).map(([name, n]) => `<tr><td>${esc(name)}</td><td class="num">${n.toLocaleString()}</td><td class="num">${Math.round(n * 100 / total)}%</td></tr>`).join("")}</tbody></table></div>` : "";
+  const table = counts.length ? `<h3 class="sub-head">Closest match game by game</h3><div class="table-wrap"><table><thead><tr><th>Champion</th><th class="num">Games</th><th class="num">Share</th></tr></thead><tbody>${counts.slice(0, 6).map(([name, n]) => `<tr><td><a href="#/games" data-champion="${esc(name)}">${esc(name)}</a></td><td class="num">${n.toLocaleString()}</td><td class="num">${Math.round(n * 100 / total)}%</td></tr>`).join("")}</tbody></table></div>` : "";
   return `<section><h2>World champion you play most like</h2><p class="headline">${esc(first[0])}</p>${why}<p class="meta">Next closest: ${rest.map(([name]) => esc(name)).join(", ")}</p><p class="hint">Based on the average of your ${overall.games.toLocaleString()} human games. It's a rough comparison of move patterns, not strength.</p>${table}</section>`;
 }
 
@@ -717,7 +717,8 @@ async function home() {
   show(overviewTab);
 }
 
-const listState = { site: "", speed: "", result: "", q: "", sort: "newest", from: "", to: "", min: "", max: "", comeback: false, upset: false, reviewed: false, brilliant: false, shown: 50 };
+const LIST_DEFAULTS = { site: "", speed: "", result: "", champion: "", q: "", from: "", to: "", min: "", max: "", comeback: false, upset: false, reviewed: false, brilliant: false, shown: 50 };
+const listState = { site: "", speed: "", result: "", champion: "", q: "", sort: "newest", from: "", to: "", min: "", max: "", comeback: false, upset: false, reviewed: false, brilliant: false, shown: 50 };
 const SORTS = { newest: "Newest first", oldest: "Oldest first", best: "Highest accuracy", worst: "Lowest accuracy", opponentHigh: "Highest-rated opponent", opponentLow: "Lowest-rated opponent", sacrifices: "Most brilliant moves", great: "Most great moves" };
 function sortGames(list) {
   // Very short games can score 100%, so they rank after full games.
@@ -745,6 +746,7 @@ function gamesView() {
     <select id="site" aria-label="Site"><option value="">All sites</option>${Object.entries(SITE_NAMES).map(([k, v]) => `<option value="${k}" ${listState.site === k ? "selected" : ""}>${v}</option>`).join("")}</select>
     <select id="speed" aria-label="Time control"><option value="">All time controls</option>${["ultraBullet", ...SPEEDS, "correspondence"].map((s) => `<option value="${s}" ${listState.speed === s ? "selected" : ""}>${cap(s)}</option>`).join("")}</select>
     <select id="result" aria-label="Result"><option value="">All results</option>${["win", "loss", "draw"].map((r) => `<option value="${r}" ${listState.result === r ? "selected" : ""}>${cap(r)}</option>`).join("")}</select>
+    <select id="champion" aria-label="Closest world champion"><option value="">All champions</option>${(data.style_counts || []).map(([name, n]) => `<option value="${esc(name)}" ${listState.champion === name ? "selected" : ""}>${esc(name)} (${n.toLocaleString()})</option>`).join("")}</select>
   </div><details class="more-filters"><summary>More filters</summary><div class="filters">
     <label>From <input id="f-from" type="date" value="${esc(listState.from)}"></label><label>To <input id="f-to" type="date" value="${esc(listState.to)}"></label>
     <label>Opponent rating <input id="f-min" type="number" inputmode="numeric" placeholder="Min" aria-label="Minimum opponent rating" value="${esc(listState.min)}"></label><label>to <input id="f-max" type="number" inputmode="numeric" placeholder="Max" aria-label="Maximum opponent rating" value="${esc(listState.max)}"></label></div>
@@ -758,6 +760,7 @@ function gamesView() {
       if (listState.site && r[C.site] !== listState.site) continue;
       if (listState.speed && r[C.speed] !== listState.speed) continue;
       if (listState.result && r[C.result] !== listState.result) continue;
+      if (listState.champion && r[C.champion] !== listState.champion) continue;
       if (listState.from && r[C.at] < Date.parse(listState.from)) continue;
       if (listState.to && r[C.at] >= Date.parse(listState.to) + 864e5) continue;
       if (listState.min && !(r[C.oppRating] >= +listState.min)) continue;
@@ -785,6 +788,7 @@ function gamesView() {
   document.getElementById("site").addEventListener("change", reset("site"));
   document.getElementById("speed").addEventListener("change", reset("speed"));
   document.getElementById("result").addEventListener("change", reset("result"));
+  document.getElementById("champion").addEventListener("change", reset("champion"));
   document.getElementById("more").addEventListener("click", () => { listState.shown += 50; draw(); });
   draw();
 }
@@ -1639,6 +1643,11 @@ function progressSection() {
 }
 
 let cleanup = null;
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("a[data-champion]");
+  if (link) Object.assign(listState, LIST_DEFAULTS, { champion: link.dataset.champion });
+});
+
 async function route() {
   if (keyHandler) { document.removeEventListener("keydown", keyHandler); keyHandler = null; }
   if (cleanup) { cleanup(); cleanup = null; }
